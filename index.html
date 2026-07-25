@@ -2,8 +2,16 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <title>1억 챌린지</title>
+<link rel="manifest" href="/manifest.json"/>
+<meta name="theme-color" content="#141110"/>
+<link rel="icon" href="/icon-192.png"/>
+<link rel="apple-touch-icon" href="/icon-192.png"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="1억 챌린지"/>
+<meta name="mobile-web-app-capable" content="yes"/>
 </head>
 <body>
 <div id="app"></div>
@@ -577,12 +585,12 @@
       <div class="check-row" style="margin-bottom:8px;">
         <div class="check-item">
           <span class="lbl">익절 기준(%)</span>
-          <input id="edit-pct-target-${ctx}" value="${esc(liveOr('edit-pct-target-'+ctx, state.targetPct))}"
+          <input id="edit-pct-target-${ctx}" inputmode="decimal" value="${esc(liveOr('edit-pct-target-'+ctx, state.targetPct))}"
             style="width:50px;text-align:center;background:transparent;border:none;border-bottom:1px dashed currentColor;color:inherit;font-family:var(--mono);font-size:13px;padding:2px 0;"/>
         </div>
         <div class="check-item">
           <span class="lbl">손절 기준(%)</span>
-          <input id="edit-pct-stop-${ctx}" value="${esc(liveOr('edit-pct-stop-'+ctx, state.stopPct))}"
+          <input id="edit-pct-stop-${ctx}" inputmode="decimal" value="${esc(liveOr('edit-pct-stop-'+ctx, state.stopPct))}"
             style="width:50px;text-align:center;background:transparent;border:none;border-bottom:1px dashed currentColor;color:inherit;font-family:var(--mono);font-size:13px;padding:2px 0;"/>
         </div>
       </div>
@@ -658,8 +666,8 @@
         </div>
 
         <div class="grid2">
-          <div class="field"><label>진입가</label><input id="f-entry" data-action="entry-input" value="${esc(formatPlain(entryVal))}" placeholder="0"/></div>
-          <div class="field"><label>총 투자금액</label><input id="f-amount" value="${esc(formatPlain(liveOr('f-amount', editing?editing.amount:'')))}" placeholder="0"/></div>
+          <div class="field"><label>진입가</label><input id="f-entry" data-action="entry-input" inputmode="decimal" value="${esc(formatPlain(entryVal))}" placeholder="0"/></div>
+          <div class="field"><label>총 투자금액</label><input id="f-amount" inputmode="decimal" value="${esc(formatPlain(liveOr('f-amount', editing?editing.amount:'')))}" placeholder="0"/></div>
         </div>
 
         ${renderPctSuggestBox(calcTargets(dir, entryVal), null, 'var(--long)', 'var(--short)')}
@@ -746,9 +754,9 @@
         <div class="ref-hint">남은 비중 ${remainingPct.toFixed(1)}% · 남은 금액 ${fmtNum(remainingAmt)}원</div>
         <div class="grid2">
           <div class="field"><label>매도가격</label>
-            <input id="sell-price-${t.id}" placeholder="0" value="${esc(liveOr('sell-price-'+t.id, editingSell?formatPlain(String(editingSell.price)):''))}"/></div>
+            <input id="sell-price-${t.id}" inputmode="decimal" placeholder="0" value="${esc(liveOr('sell-price-'+t.id, editingSell?formatPlain(String(editingSell.price)):''))}"/></div>
           <div class="field"><label>매도비율(%)</label>
-            <input id="sell-pct-${t.id}" placeholder="0" value="${esc(liveOr('sell-pct-'+t.id, editingSell? String(editingSell.pct) : String(Number(remainingPct.toFixed(1)))))}"/></div>
+            <input id="sell-pct-${t.id}" inputmode="decimal" placeholder="0" value="${esc(liveOr('sell-pct-'+t.id, editingSell? String(editingSell.pct) : String(Number(remainingPct.toFixed(1)))))}"/></div>
         </div>
         <div class="save-row" style="margin-top:8px;">
           <button class="ghost" data-action="cancel-sell-form" data-id="${t.id}">취소</button>
@@ -887,7 +895,7 @@
           <div style="margin-bottom:14px;padding:14px 16px;background:var(--hbg);border:1px solid var(--hborder);border-radius:8px;">
             <div class="card-head" style="padding-left:0;"><span class="cat-label" style="font-size:13px;color:var(--htext);">출금 기록</span></div>
             <div style="display:flex;gap:8px;margin-top:8px;">
-              <input id="withdraw-amount" placeholder="출금액" style="flex:1;font-family:var(--sans);background:var(--hbg2);border:1px solid var(--hborder);border-radius:8px;color:var(--htext);font-size:13.5px;padding:8px 10px;"/>
+              <input id="withdraw-amount" inputmode="decimal" placeholder="출금액" style="flex:1;font-family:var(--sans);background:var(--hbg2);border:1px solid var(--hborder);border-radius:8px;color:var(--htext);font-size:13.5px;padding:8px 10px;"/>
               <button class="primary" data-action="save-withdrawal">출금 저장</button>
             </div>
           </div>
