@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>1억 챌린지</title>
+</head>
+<body>
+<div id="app"></div>
+<style>
+  :root{
+    --bg:#141110;
+    --panel:rgba(239,235,226,0.93);
+    --panel2:rgba(226,218,199,0.93);
+    --border:rgba(28,25,20,0.18);
+    --border-onbg:rgba(241,238,233,0.22);
+    --text:#1C1712;
+    --page-text:#F3F0EA;
+    --dim:#766854;
+    --dim2:#9C8F79;
+    --accent:#6B5D4A;
+    --accent-onbg:#CBB89E;
+    --dark:#18130D;
+    --dark-text:#F3F0EA;
+    --long:#3F6B42;
+    --long-dim:rgba(63,107,66,0.14);
+    --short:#AE4E33;
+    --short-dim:rgba(174,78,51,0.14);
+    /* history side (우측: 자본금 / 통계 / 출금 / 히스토리) — 다크 팔레트 */
+    --hbg:rgba(30,26,21,0.85);
+    --hbg2:rgba(51,44,34,0.85);
+    --hborder:rgba(241,238,233,0.2);
+    --htext:#F7F5F1;
+    --hdim:#C9BFAF;
+    --hdim2:#8C8272;
+    --haccent:#D6C4B0;
+    --hlong:#94B885;
+    --hlong-dim:rgba(148,184,133,0.2);
+    --hshort:#DA9578;
+    --hshort-dim:rgba(218,149,120,0.2);
+    --mono:-apple-system,BlinkMacSystemFont,'Pretendard','Apple SD Gothic Neo',sans-serif;
+    --sans:-apple-system,BlinkMacSystemFont,'Pretendard','Apple SD Gothic Neo',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  #app{
+    font-family:var(--sans);
+    background:var(--bg);
+    color:var(--text);
+    min-height:100vh;
+    padding:0;
+    -webkit-font-smoothing:antialiased;
+  }
+  .shell{max-width:1180px;margin:0 auto;padding:32px 20px 60px;}
+  .topbar{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:30px;flex-wrap:wrap;gap:10px;padding-bottom:18px;border-bottom:1px solid var(--border-onbg);}
+  .brand{display:flex;align-items:baseline;gap:11px;position:relative;}
+  .brand .tick{font-size:18px;line-height:1;}
+  .brand h1{font-size:21px;margin:0;font-weight:700;letter-spacing:-0.4px;color:var(--page-text);}
+  .tabs{display:flex;gap:3px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:3px;}
+  .tab{
+    padding:7px 15px;border-radius:5px;font-size:13px;font-weight:600;color:var(--dim);
+    cursor:pointer;transition:background .15s,color .15s;user-select:none;letter-spacing:.02em;
+  }
+  .tab.active{background:var(--dark);color:var(--dark-text);}
+  .tab:hover:not(.active){color:var(--text);}
+
+  .section-title{
+    font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:.14em;
+    margin:28px 0 12px;font-weight:700;position:relative;padding-left:14px;
+  }
+  .section-title.on-bg{color:var(--accent-onbg);}
+  .section-title.on-hist{color:var(--haccent);}
+  .section-title::before{
+    content:'';position:absolute;left:0;top:2px;width:6px;height:6px;
+    border-left:1px solid currentColor;border-top:1px solid currentColor;
+  }
+  .section-title:first-child{margin-top:0;}
+
+  .card{
+    background:var(--panel);border:1px solid var(--border);border-radius:8px;
+    padding:18px 20px;margin-bottom:14px;position:relative;overflow:hidden;
+  }
+  .wick{position:absolute;left:0;top:0;bottom:0;width:2px;}
+  .card-head{display:flex;align-items:center;gap:10px;margin-bottom:4px;padding-left:8px;}
+  .cat-label{font-size:15.5px;font-weight:700;letter-spacing:-0.2px;color:var(--text);}
+  .cat-sub{font-size:12.5px;color:var(--dim);padding-left:8px;margin-bottom:12px;}
+  textarea{
+    width:100%;min-height:64px;background:var(--panel2);border:1px solid var(--border);
+    border-radius:6px;color:var(--text);font-family:var(--sans);font-size:14px;
+    padding:10px 12px;resize:vertical;line-height:1.55;
+  }
+  textarea::placeholder{color:var(--dim2);}
+  textarea:focus{outline:none;border-color:var(--accent);}
+
+  .save-row{display:flex;justify-content:flex-end;margin-top:18px;align-items:center;gap:10px;}
+  .saved-msg{font-size:12px;color:var(--long);opacity:0;transition:opacity .3s;font-family:var(--mono);}
+  .saved-msg.show{opacity:1;}
+  button.primary{
+    background:var(--dark);color:var(--dark-text);border:1px solid var(--dark);border-radius:6px;
+    padding:9px 20px;font-size:12.5px;font-weight:700;cursor:pointer;transition:opacity .15s;
+    text-transform:uppercase;letter-spacing:.08em;
+  }
+  button.primary:hover{opacity:.85;}
+  button.ghost{
+    background:transparent;color:var(--dim);border:1px solid var(--border);border-radius:6px;
+    padding:8px 15px;font-size:12px;cursor:pointer;text-transform:uppercase;letter-spacing:.06em;
+  }
+  button.ghost:hover{color:var(--text);border-color:var(--accent);}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .field{margin-bottom:10px;}
+  .field label{display:block;font-size:13px;color:var(--text);margin-bottom:6px;font-weight:700;}
+  .field input,.field select{
+    width:100%;background:var(--panel2);border:1.5px solid var(--border);border-radius:6px;
+    color:var(--text);font-size:14.5px;padding:9px 11px;font-family:var(--mono);font-weight:600;
+  }
+  .field input::placeholder{color:var(--dim2);}
+  .field input:focus,.field select:focus{outline:none;border-color:var(--accent);}
+  .field select{font-family:var(--sans);}
+  .dir-toggle{display:flex;gap:8px;}
+  .dir-btn{
+    flex:1;text-align:center;padding:9px;border-radius:6px;border:1.5px solid var(--border);
+    cursor:pointer;font-size:14px;font-weight:700;color:var(--dim);background:var(--panel2);
+  }
+  .dir-btn.long-active{background:var(--long-dim);border-color:var(--long);color:var(--long);}
+  .dir-btn.short-active{background:var(--short-dim);border-color:var(--short);color:var(--short);}
+
+  .check-row{display:flex;gap:8px;margin-bottom:8px;}
+  .check-item{
+    flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;
+    background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:9px 12px;
+  }
+  .check-item .lbl{font-size:13px;color:var(--text);font-weight:600;}
+  .yn{display:flex;gap:4px;}
+  .yn button{
+    border:1px solid var(--border);background:transparent;color:var(--dim2);
+    border-radius:5px;width:30px;height:26px;font-size:11px;cursor:pointer;font-weight:700;
+  }
+  .yn button.y-on{background:var(--long-dim);border-color:var(--long);color:var(--long);}
+  .yn button.n-on{background:var(--short-dim);border-color:var(--short);color:var(--short);}
+
+  .ref-hint{
+    font-size:12.5px;color:var(--hdim);background:var(--hbg2);border-left:2px solid var(--haccent);
+    padding:7px 11px;margin-bottom:10px;border-radius:0 5px 5px 0;line-height:1.55;
+  }
+  .pct-input{
+    width:28px;background:transparent;border:none;border-bottom:1px dashed currentColor;
+    color:inherit;font-family:var(--mono);font-size:inherit;font-weight:inherit;
+    text-align:center;padding:0 1px;
+  }
+  .pct-input:focus{outline:none;border-bottom-style:solid;}
+
+  .log-layout{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start;position:relative;}
+  .log-col-right{position:sticky;top:20px;padding-left:32px;border-left:1px dashed var(--border-onbg);}
+  @media (max-width:860px){
+    .log-layout{grid-template-columns:1fr;}
+    .log-col-right{position:static;padding-left:0;border-left:none;}
+  }
+  .history-panel{background:var(--hbg);border:1px solid var(--hborder);border-radius:8px;padding:16px 18px;max-height:calc(100vh - 160px);overflow-y:auto;}
+  .history-panel .section-title{margin-top:0;color:var(--haccent);}
+
+  .stats-row{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px;}
+  .stat{background:var(--hbg);border:1px solid var(--hborder);border-radius:8px;padding:13px 15px;}
+  .stat .k{font-size:11.5px;color:var(--hdim);margin-bottom:5px;letter-spacing:.02em;}
+  .stat .v{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--htext);}
+
+  .trade-row{
+    background:var(--hbg);border:1px solid var(--hborder);border-radius:8px;
+    padding:12px 14px;margin-bottom:8px;border-left:3px solid var(--hdim2);cursor:pointer;
+  }
+  .trade-row.long{border-left-color:var(--hlong);}
+  .trade-row.short{border-left-color:var(--hshort);}
+  .trade-top{display:flex;justify-content:space-between;align-items:center;}
+  .trade-name{font-weight:700;font-size:14.5px;display:flex;align-items:center;gap:8px;color:var(--htext);}
+  .dir-badge{font-size:10.5px;padding:2px 6px;border-radius:4px;font-weight:700;}
+  .dir-badge.long{background:var(--hlong-dim);color:var(--hlong);}
+  .dir-badge.short{background:var(--hshort-dim);color:var(--hshort);}
+  .trade-pnl{font-family:var(--mono);font-weight:700;font-size:14.5px;}
+  .trade-date{font-size:11.5px;color:var(--hdim);font-family:var(--mono);}
+  .trade-detail{margin-top:10px;padding-top:10px;border-top:1px solid var(--hborder);font-size:13px;color:var(--hdim);}
+  .trade-detail .q{color:var(--hdim);margin-top:8px;font-size:12px;font-weight:600;}
+  .trade-detail .a{color:var(--htext);margin-top:2px;}
+  .trade-detail .field label{color:var(--htext);}
+  .trade-detail .field input,.trade-detail .field select{
+    background:var(--hbg2);border-color:var(--hborder);color:var(--htext);
+  }
+  .trade-detail .field input::placeholder{color:var(--hdim2);}
+  .trade-detail .check-item{background:var(--hbg2);border-color:var(--hborder);}
+  .trade-detail .check-item .lbl{color:var(--htext);}
+  .empty{text-align:center;color:var(--hdim);padding:40px 0;font-size:13px;}
+  .del-btn{font-size:11px;color:var(--hdim2);background:none;border:none;cursor:pointer;margin-top:10px;}
+  .del-btn:hover{color:var(--hshort);}
+  .chip-del:hover{color:var(--short) !important;}
+  .ticker-option:hover{background:var(--panel);}
+  .pos{color:var(--hlong);} .neg{color:var(--hshort);} .neu{color:var(--hdim);}
+</style>
+
+<script>
+(function(){
+  const TICKER_PRESETS = ['비트코인','이더리움','SOXL','KOSPI','NAS100','삼성전자','하이닉스'];
+  const TICKER_TV_MAP = {
+    '비트코인': 'BINANCE:BTCUSDT',
+    '이더리움': 'BINANCE:ETHUSDT',
+    'SOXL': 'AMEX:SOXL',
+    'KOSPI': 'KRX:KOSPI',
+    'NAS100': 'TVC:NDX',
+    '삼성전자': 'KRX:005930',
+    '하이닉스': 'KRX:000660',
+  };
+  function tvUrl(ticker){
+    const symbol = TICKER_TV_MAP[ticker];
+    if(symbol) return `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(symbol)}`;
+    return `https://www.tradingview.com/symbols/${encodeURIComponent(ticker)}/`;
+  }
+  const CATS = [
+    {key:'기본환경', label:'기본 환경', sub:'주력 종목 / 시간축 / 매매 가능 시간 / 주력 방향', color:'var(--text)'},
+    {key:'진입조건', label:'진입 조건', sub:'시장 상태 / 주요 자리 / 지표 / 캔들·거래량 반응', color:'var(--accent)'},
+    {key:'리스크', label:'리스크', sub:'1회 손실 / 하루 손실 / 손절 기준 / 최대 포지션', color:'var(--short)'},
+    {key:'익절', label:'익절', sub:'1차·2차 목표 / 잔여 물량 / 본절 이동 / 트레일링', color:'var(--long)'},
+    {key:'중단조건', label:'중단 조건', sub:'연속 손절 / 수면·음주 / 뉴스 / FOMO·복수심', color:'var(--dim)'},
+  ];
+  const DEFAULT_SETTINGS = {
+    기본환경: '15분봉, 30분봉 → 4시간 이내 / 1시간봉, 4시간봉 → 하루~일주일',
+    진입조건: '50 · 100 · 200 · 400 이평선 / 지지·저항',
+    리스크: '1회 손실 → 2% / 하루 손실 → 5% / 이평선·지지·저항 깨짐',
+    익절: '하루 수익 → 2% / 주간 수익 → 13% / 단기 이평선·지지·저항 기준 50% 익절',
+    중단조건: '판단력 부족 / 본전 심리 → 절대 매매 금지',
+  };
+  const DEFAULT_JOURNALS = [
+    {id:'main', name:'1억 챌린지'},
+    {id:'journal2', name:'투자 기록'},
+  ];
+
+  let state = {
+    tab: 'log',
+    currentJournal: 'main',
+    journals: DEFAULT_JOURNALS,
+    journalDropdownOpen: false,
+    settings: {},
+    trades: [],
+    customTickers: [],
+    capital: 1000000,
+    withdrawals: [],
+    editingId: null,
+    ticker: '',
+    addingTicker: false,
+    tickerDropdownOpen: false,
+    formPhotos: [],
+    viewingPhoto: null,
+    dir: 'long',
+    savedFlash: false,
+    showWithdrawForm: false,
+    targetPct: 6,
+    stopPct: 2,
+    editingPct: false,
+    showPnlBreakdown: false,
+    pnlView: 'daily',
+  };
+
+  function esc(s){
+    return (s==null?'':String(s)).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function liveOr(id, fallback){
+    const el = document.getElementById(id);
+    return el ? el.value : (fallback ?? '');
+  }
+  function fmtNum(n){
+    if(n==null || isNaN(n)) return '0';
+    return Math.trunc(Number(n)).toLocaleString();
+  }
+  function fmtPrice(n){
+    if(n==null || isNaN(n)) return '0';
+    return Math.trunc(n).toLocaleString();
+  }
+  function toNum(v){
+    if(v==null) return NaN;
+    return parseFloat(String(v).replace(/,/g,''));
+  }
+  function resizeImageFile(file, maxDim=900, quality=0.72){
+    return new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        const img = new Image();
+        img.onload = ()=>{
+          let w = img.width, h = img.height;
+          if(w>maxDim || h>maxDim){
+            if(w>h){ h = Math.round(h*maxDim/w); w = maxDim; }
+            else { w = Math.round(w*maxDim/h); h = maxDim; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = reject;
+        img.src = reader.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+  function formatPlain(raw){
+    if(raw==null || raw==='') return '';
+    let cleaned = String(raw).replace(/[^0-9.]/g,'');
+    const firstDot = cleaned.indexOf('.');
+    if(firstDot!==-1){
+      cleaned = cleaned.slice(0,firstDot+1) + cleaned.slice(firstDot+1).replace(/\./g,'');
+    }
+    const parts = cleaned.split('.');
+    let intPart = parts[0]||'';
+    const dec = parts.length>1 ? '.'+parts[1].slice(0,2) : '';
+    if(intPart==='') return dec;
+    return Number(intPart).toLocaleString() + dec;
+  }
+  function reformatWithCursor(input){
+    const original = input.value;
+    const cursor = input.selectionStart;
+    const digitsBeforeCursor = original.slice(0, cursor).replace(/[^0-9]/g,'').length;
+    const formatted = formatPlain(original);
+    input.value = formatted;
+    let count = 0, pos = formatted.length;
+    for(let i=0;i<formatted.length;i++){
+      if(/[0-9]/.test(formatted[i])) count++;
+      if(count === digitsBeforeCursor){ pos = i+1; break; }
+    }
+    if(digitsBeforeCursor===0) pos = 0;
+    input.setSelectionRange(pos, pos);
+  }
+  function calcTargets(dir, entry){
+    const e = toNum(entry);
+    if(isNaN(e) || e<=0) return null;
+    const tPct = (toNum(state.targetPct) || 6)/100;
+    const sPct = (toNum(state.stopPct) || 2)/100;
+    const target = dir==='long' ? e*(1+tPct) : e*(1-tPct);
+    const stop = dir==='long' ? e*(1-sPct) : e*(1+sPct);
+    return {target, stop};
+  }
+
+  // ---- partial-sell calculations ----
+  function sellsSoldPct(t){
+    return (t.sells||[]).reduce((s,x)=> s + (toNum(x.pct)||0), 0);
+  }
+  function tradeRemainingPct(t){
+    return Math.max(0, 100 - sellsSoldPct(t));
+  }
+  function tradeRemainingAmount(t){
+    return (toNum(t.amount)||0) * tradeRemainingPct(t) / 100;
+  }
+  function sellPnlPct(t, price){
+    const entry = toNum(t.entry);
+    if(!entry) return 0;
+    return t.dir==='long' ? (price-entry)/entry : (entry-price)/entry;
+  }
+  function sellRealizedAmount(t, sell){
+    const portion = (toNum(t.amount)||0) * (toNum(sell.pct)||0) / 100;
+    return portion * sellPnlPct(t, toNum(sell.price));
+  }
+  function tradeRealizedPnl(t){
+    return (t.sells||[]).reduce((s,x)=> s + sellRealizedAmount(t,x), 0);
+  }
+  function tradeIsFullyClosed(t){
+    return sellsSoldPct(t) >= 99.999;
+  }
+  function tradeFinalReturnPct(t){
+    const amt = toNum(t.amount)||0;
+    return amt ? (tradeRealizedPnl(t)/amt*100) : null;
+  }
+
+  // ---- pnl breakdown by period ----
+  function allSellEvents(){
+    const out = [];
+    state.trades.forEach(t=>{
+      (t.sells||[]).forEach(s=>{
+        out.push({ date: s.date, pnl: sellRealizedAmount(t, s) });
+      });
+    });
+    return out;
+  }
+  function getMonday(y,m,d){
+    const dt = new Date(y, m-1, d);
+    const day = dt.getDay();
+    const diff = day===0 ? -6 : 1-day;
+    const monday = new Date(dt); monday.setDate(dt.getDate()+diff);
+    const sunday = new Date(monday); sunday.setDate(monday.getDate()+6);
+    return {monday, sunday};
+  }
+  function groupPnlByPeriod(view){
+    const events = allSellEvents();
+    const groups = {};
+    events.forEach(ev=>{
+      const [y,m,d] = ev.date.split('-').map(Number);
+      let key, label, sortKey;
+      if(view==='daily'){
+        key = ev.date;
+        label = `${y}.${String(m).padStart(2,'0')}.${String(d).padStart(2,'0')}`;
+        sortKey = ev.date;
+      } else if(view==='weekly'){
+        const {monday, sunday} = getMonday(y,m,d);
+        key = monday.toISOString().slice(0,10);
+        label = `${monday.getMonth()+1}/${monday.getDate()} ~ ${sunday.getMonth()+1}/${sunday.getDate()}`;
+        sortKey = key;
+      } else {
+        key = `${y}-${String(m).padStart(2,'0')}`;
+        label = `${y}년 ${m}월`;
+        sortKey = key;
+      }
+      if(!groups[key]) groups[key] = {label, sortKey, pnl:0};
+      groups[key].pnl += ev.pnl;
+    });
+    return Object.values(groups).sort((a,b)=> b.sortKey.localeCompare(a.sortKey));
+  }
+
+  const LS_PREFIX = 'trading-journal:';
+  function nsKey(key){
+    if(key==='journals') return key; // 저널 목록 자체는 공유(전역) 키
+    if(!state.currentJournal || state.currentJournal==='main') return key; // 기존 데이터와 호환
+    return `${key}:${state.currentJournal}`;
+  }
+  async function storageGet(key, fallback){
+    const k = nsKey(key);
+    try{
+      if(window.storage && window.storage.get){
+        const r = await window.storage.get(k,false);
+        return r ? JSON.parse(r.value) : fallback;
+      }
+    }catch(e){}
+    try{
+      const raw = localStorage.getItem(LS_PREFIX+k);
+      return raw!=null ? JSON.parse(raw) : fallback;
+    }catch(e){ return fallback; }
+  }
+  async function storageSet(key, value){
+    const k = nsKey(key);
+    try{
+      if(window.storage && window.storage.set){
+        await window.storage.set(k, JSON.stringify(value), false);
+        return;
+      }
+    }catch(e){}
+    try{ localStorage.setItem(LS_PREFIX+k, JSON.stringify(value)); }
+    catch(e){ console.error('storage error', e); }
+  }
+
+  async function loadAll(){
+    state.journals = await storageGet('journals', DEFAULT_JOURNALS);
+    await loadJournalData();
+    render();
+  }
+
+  async function loadJournalData(){
+    state.settings = await storageGet('settings', {});
+    let settingsChanged = false;
+    CATS.forEach(c=>{
+      if(!state.settings[c.key] && DEFAULT_SETTINGS[c.key]){
+        state.settings[c.key] = DEFAULT_SETTINGS[c.key];
+        settingsChanged = true;
+      }
+    });
+    if(settingsChanged) await storageSet('settings', state.settings);
+    state.trades = await storageGet('trades', []);
+    state.customTickers = await storageGet('customTickers', []);
+    const defaultCapital = state.currentJournal==='journal2' ? 10000000 : 1000000;
+    state.capital = await storageGet('capital', defaultCapital);
+    state.withdrawals = await storageGet('withdrawals', []);
+    const pctSettings = await storageGet('pctSettings', {target:6, stop:2});
+    state.targetPct = pctSettings.target ?? 6;
+    state.stopPct = pctSettings.stop ?? 2;
+  }
+
+  async function switchJournal(id){
+    if(id===state.currentJournal){ state.journalDropdownOpen = false; render(); return; }
+    state.currentJournal = id;
+    state.journalDropdownOpen = false;
+    state.tab = 'log';
+    state.editingId = null;
+    state.ticker = '';
+    state.dir = 'long';
+    state.formPhotos = [];
+    formChecklist = {}; formChecklistNotes = {};
+    await loadJournalData();
+    render();
+  }
+
+  function getEditingTrade(){
+    return state.trades.find(t=>t.id===state.editingId) || null;
+  }
+
+  function render(){
+    const app = document.getElementById('app');
+    app.innerHTML = `
+      <div class="shell">
+        <div class="topbar">
+          <div class="brand">
+            <span class="tick">💰</span>
+            <h1 style="cursor:pointer;user-select:none;" data-action="toggle-journal-dropdown">${esc((state.journals.find(j=>j.id===state.currentJournal)||{}).name || '1억 챌린지')}</h1>
+            <button data-action="toggle-journal-dropdown" style="background:none;border:none;cursor:pointer;padding:0;margin:0 0 0 2px;opacity:.75;display:inline-flex;align-items:center;position:relative;top:-2px;">
+              <span style="display:inline-block;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;${state.journalDropdownOpen?`border-bottom:6px solid var(--page-text);`:`border-top:6px solid var(--page-text);`}"></span>
+            </button>
+            ${state.journalDropdownOpen ? `
+            <div style="position:absolute;top:100%;left:0;margin-top:8px;z-index:30;min-width:180px;background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 10px 28px rgba(0,0,0,0.35);">
+              ${state.journals.map(j=>`
+                <div class="ticker-option" data-action="select-journal" data-id="${j.id}" style="padding:10px 14px;cursor:pointer;font-size:13.5px;color:var(--text);${j.id===state.currentJournal?'font-weight:700;background:var(--panel2);':''}">${esc(j.name)}</div>
+              `).join('')}
+            </div>` : ''}
+          </div>
+          <div class="tabs">
+            <div class="tab ${state.tab==='log'?'active':''}" data-action="tab" data-tab="log">매매 기록</div>
+            <div class="tab ${state.tab==='settings'?'active':''}" data-action="tab" data-tab="settings">시스템 설정</div>
+          </div>
+        </div>
+        ${state.tab==='settings' ? renderSettingsTab() : renderLogTab()}
+      </div>
+      ${state.viewingPhoto ? `
+      <div data-action="close-photo-modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:100;display:flex;align-items:center;justify-content:center;padding:24px;cursor:zoom-out;">
+        <img src="${state.viewingPhoto}" style="max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,0.5);cursor:default;" onclick="event.stopPropagation()"/>
+        <button data-action="close-photo-modal" style="position:absolute;top:20px;right:24px;background:rgba(255,255,255,0.12);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;width:36px;height:36px;font-size:18px;cursor:pointer;">×</button>
+      </div>` : ''}
+    `;
+    bindEvents();
+  }
+
+  function renderSettingsTab(){
+    const cards = CATS.map(c=>`
+      <div class="card">
+        <div class="wick" style="background:${c.color}"></div>
+        <div class="card-head"><span class="cat-label" style="color:${c.color}">${c.label}</span></div>
+        <div class="cat-sub">${c.sub}</div>
+        <textarea data-cat="${c.key}" placeholder="여기에 내 기준을 적어두세요...">${esc(state.settings[c.key]||'')}</textarea>
+      </div>
+    `).join('');
+    return `
+      <div class="section-title on-bg">나의 매매 시스템 (한 번 정해두고 계속 기준으로 씀)</div>
+      ${cards}
+      <div class="save-row">
+        <span class="saved-msg ${state.savedFlash?'show':''}">저장됨</span>
+        <button class="primary" data-action="save-settings">설정 저장</button>
+      </div>
+    `;
+  }
+
+  function renderPctSuggestBox(suggestObj, applyId, colorLong, colorShort){
+    if(!suggestObj) return '';
+    const editing = state.editingPct;
+    const ctx = applyId!=null ? String(applyId) : 'form';
+    const boxAttrs = (val) => applyId!=null
+      ? `data-action="apply-sell-price" data-id="${applyId}" data-value="${fmtPrice(val)}" style="cursor:pointer;"`
+      : '';
+    return `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
+        <button class="ghost" style="padding:2px 10px;font-size:10px;" data-action="toggle-pct-edit">${editing?'닫기':'기준 수정'}</button>
+      </div>
+      ${editing ? `
+      <div class="check-row" style="margin-bottom:8px;">
+        <div class="check-item">
+          <span class="lbl">익절 기준(%)</span>
+          <input id="edit-pct-target-${ctx}" value="${esc(liveOr('edit-pct-target-'+ctx, state.targetPct))}"
+            style="width:50px;text-align:center;background:transparent;border:none;border-bottom:1px dashed currentColor;color:inherit;font-family:var(--mono);font-size:13px;padding:2px 0;"/>
+        </div>
+        <div class="check-item">
+          <span class="lbl">손절 기준(%)</span>
+          <input id="edit-pct-stop-${ctx}" value="${esc(liveOr('edit-pct-stop-'+ctx, state.stopPct))}"
+            style="width:50px;text-align:center;background:transparent;border:none;border-bottom:1px dashed currentColor;color:inherit;font-family:var(--mono);font-size:13px;padding:2px 0;"/>
+        </div>
+      </div>
+      <div class="save-row" style="margin-top:0;margin-bottom:10px;">
+        <button class="primary" data-action="save-pct-both" data-ctx="${ctx}">저장</button>
+      </div>
+      ` : `
+      <div class="check-row" style="margin-bottom:10px;">
+        <div class="check-item" ${boxAttrs(suggestObj.target)}>
+          <span class="lbl">익절가 (+${state.targetPct}%)</span>
+          <span style="font-family:var(--mono);color:${colorLong};font-weight:700;font-size:13px;">${fmtNum(suggestObj.target)}</span>
+        </div>
+        <div class="check-item" ${boxAttrs(suggestObj.stop)}>
+          <span class="lbl">손절가 (-${state.stopPct}%)</span>
+          <span style="font-family:var(--mono);color:${colorShort};font-weight:700;font-size:13px;">${fmtNum(suggestObj.stop)}</span>
+        </div>
+      </div>
+      `}
+    `;
+  }
+
+
+  function renderTradeForm(){
+    const editing = getEditingTrade();
+    const currentTicker = state.ticker || (editing ? editing.ticker : '');
+    const allTickers = [...TICKER_PRESETS, ...state.customTickers];
+    const dir = editing ? editing.dir : state.dir;
+    const entryVal = editing ? liveOr('f-entry', editing.entry) : liveOr('f-entry', '');
+    const hasSettings = state.settings.진입조건 || state.settings.리스크;
+
+    const tickerField = state.addingTicker ? `
+      <div style="display:flex;gap:8px;">
+        <input id="f-newticker" style="font-family:var(--sans)" placeholder="새 종목명 입력" autofocus/>
+        <button class="ghost" data-action="confirm-add-ticker">추가</button>
+        <button class="ghost" data-action="cancel-add-ticker">취소</button>
+      </div>
+    ` : `
+      <div style="position:relative;">
+        <div data-action="toggle-ticker-dropdown" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;background:var(--panel2);border:1.5px solid var(--border);border-radius:6px;color:var(--text);font-size:14.5px;padding:9px 11px;font-family:var(--sans);font-weight:600;">
+          <span>${currentTicker ? esc(currentTicker) : '선택하세요'}</span>
+          <span style="opacity:.6;font-size:11px;">${state.tickerDropdownOpen?'▲':'▼'}</span>
+        </div>
+        ${state.tickerDropdownOpen ? `
+        <div style="position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;max-height:220px;overflow-y:auto;background:var(--panel2);border:1.5px solid var(--border);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,0.25);">
+          ${allTickers.map(tk=>`
+            <div class="ticker-option" data-action="select-ticker-option" data-ticker="${esc(tk)}" style="display:flex;justify-content:space-between;align-items:center;padding:9px 11px;cursor:pointer;font-size:14px;${tk===currentTicker?`background:var(--panel);`:''}">
+              <span>${esc(tk)}</span>
+              ${state.customTickers.includes(tk) ? `<button class="del-btn chip-del" data-action="delete-custom-ticker" data-ticker="${esc(tk)}" style="margin:0;padding:0 4px;font-size:14px;line-height:1;color:var(--dim);">×</button>` : ''}
+            </div>
+          `).join('')}
+          <div class="ticker-option" data-action="open-add-ticker" style="padding:9px 11px;cursor:pointer;font-size:14px;color:var(--accent);font-weight:700;border-top:1px solid var(--border);">+ 직접 추가</div>
+        </div>` : ''}
+      </div>
+    `;
+
+    return `
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-head"><span class="cat-label">${editing ? '기록 수정' : '새 매매 기록'}</span></div>
+        <div style="height:6px;"></div>
+
+        <div class="field">
+          <label style="display:flex;justify-content:space-between;align-items:center;">
+            <span>종목명</span>
+            ${currentTicker ? `<a href="${tvUrl(currentTicker)}" target="_blank" rel="noopener" style="font-weight:400;font-size:11px;color:var(--dim);text-decoration:none;">📈 TradingView에서 보기</a>` : ''}
+          </label>${tickerField}
+        </div>
+
+        <div class="field"><label>방향</label>
+          <div class="dir-toggle">
+            <div class="dir-btn ${dir==='long'?'long-active':''}" data-action="set-dir" data-dir="long">롱 (매수)</div>
+            <div class="dir-btn ${dir==='short'?'short-active':''}" data-action="set-dir" data-dir="short">숏 (매도)</div>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="field"><label>진입가</label><input id="f-entry" data-action="entry-input" value="${esc(formatPlain(entryVal))}" placeholder="0"/></div>
+          <div class="field"><label>총 투자금액</label><input id="f-amount" value="${esc(formatPlain(liveOr('f-amount', editing?editing.amount:'')))}" placeholder="0"/></div>
+        </div>
+
+        ${renderPctSuggestBox(calcTargets(dir, entryVal), null, 'var(--long)', 'var(--short)')}
+
+        <div class="section-title" style="margin-top:20px;">체크리스트 (5개 모두 확인해야 저장돼요)</div>
+        ${CATS.map(c=>{
+          const checked = formChecklist[c.key] ?? (editing && editing.checklist ? editing.checklist[c.key] : false) ?? false;
+          const refText = DEFAULT_SETTINGS[c.key];
+          const note = formChecklistNotes[c.key] ?? (editing && editing.checklistNotes ? editing.checklistNotes[c.key] : '') ?? '';
+          return `
+          <div class="checklist-block" style="margin-bottom:8px;">
+            <div class="check-item checklist-cat" style="align-items:flex-start;cursor:pointer;" data-action="toggle-checklist" data-cat="${c.key}">
+              <div style="flex:1;">
+                <div class="lbl" style="color:${c.color};font-weight:700;">${c.label}</div>
+                <div style="font-size:11.5px;color:var(--dim2);margin-top:2px;">${refText ? esc(refText) : '설정에서 아직 안 적어둠'}</div>
+              </div>
+              <div class="yn">
+                <button class="${checked?'y-on':''}" style="width:36px;">${checked?'✓':''}</button>
+              </div>
+            </div>
+            ${checked ? `
+            <textarea data-checklist-note="1" data-cat="${c.key}" style="min-height:36px;font-family:var(--sans);font-size:12.5px;margin-top:6px;" placeholder="${c.label} 관련 메모...">${esc(note)}</textarea>
+            ` : ''}
+          </div>`;
+        }).join('')}
+
+        <div class="section-title" style="margin-top:20px;">복기</div>
+        <div class="field"><label>왜 들어갔나</label>
+          <textarea id="f-why" style="min-height:44px;font-family:var(--sans)" placeholder="진입 이유...">${esc(liveOr('f-why', editing?editing.why:''))}</textarea>
+        </div>
+        <div class="field"><label>규칙을 지켰나</label>
+          <textarea id="f-rulekept" style="min-height:44px;font-family:var(--sans)" placeholder="지킨 점 / 못 지킨 점...">${esc(liveOr('f-rulekept', editing?editing.ruleKept:''))}</textarea>
+        </div>
+        <div class="field"><label>반복되는 실수는 무엇인가</label>
+          <textarea id="f-mistake" style="min-height:44px;font-family:var(--sans)" placeholder="패턴을 적어두세요...">${esc(liveOr('f-mistake', editing?editing.mistake:''))}</textarea>
+        </div>
+
+        <div class="field">
+          <label>사진 첨부 (차트 스크린샷 등, 최대 4장)</label>
+          <input type="file" id="f-photo-input" accept="image/*" multiple style="display:none"/>
+          <button class="ghost" type="button" data-action="trigger-photo-upload">+ 사진 추가</button>
+          ${state.formPhotos.length>0 ? `
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">
+            ${state.formPhotos.map((p,i)=>`
+              <div style="position:relative;width:64px;height:64px;">
+                <img src="${p}" data-action="view-photo" data-photo="${p}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:zoom-in;"/>
+                <button data-action="remove-photo" data-index="${i}" style="position:absolute;top:-6px;right:-6px;background:var(--dark);color:var(--dark-text);border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:1;">×</button>
+              </div>
+            `).join('')}
+          </div>` : ''}
+        </div>
+
+        <div class="save-row">
+          ${editing ? `<button class="ghost" data-action="cancel-edit">취소</button>` : ''}
+          <button class="primary" data-action="save-trade">${editing?'수정 저장':'기록 저장'}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderTradeRow(t){
+    const open = t._open;
+    const sells = t.sells || [];
+    const remainingPct = tradeRemainingPct(t);
+    const remainingAmt = tradeRemainingAmount(t);
+    const fullyClosed = tradeIsFullyClosed(t);
+    const realizedPnl = tradeRealizedPnl(t);
+    const finalReturn = tradeFinalReturnPct(t);
+
+    const headerRight = sells.length===0
+      ? `<span class="trade-pnl neu">${t.amount?fmtNum(toNum(t.amount))+'원':''} <span style="font-size:10px;color:var(--hdim2);font-weight:600;margin-left:4px;">보유 중</span></span>`
+      : fullyClosed
+        ? `<span class="trade-pnl ${realizedPnl>0?'pos':realizedPnl<0?'neg':'neu'}">${realizedPnl>0?'+':''}${fmtNum(realizedPnl)}원${finalReturn!=null?` <span style="font-size:11px;margin-left:4px;opacity:.8;">(${finalReturn>0?'+':''}${finalReturn.toFixed(2)}%)</span>`:''}</span>`
+        : `<span class="trade-pnl ${realizedPnl>0?'pos':realizedPnl<0?'neg':'neu'}">${realizedPnl>0?'+':''}${fmtNum(realizedPnl)}원 <span style="font-size:10px;color:var(--hdim2);font-weight:600;margin-left:4px;">부분매도 · ${remainingPct.toFixed(1)}%남음</span></span>`;
+
+    const sellFormOpen = t._sellFormOpen;
+    const editingSellId = t._editingSellId;
+    const editingSell = editingSellId!=null ? sells.find(s=>s.id===editingSellId) : null;
+    const suggest = calcTargets(t.dir, t.entry);
+
+    const sellFormHtml = sellFormOpen ? `
+      <div class="field" style="margin-top:10px;">
+        ${renderPctSuggestBox(suggest, t.id, 'var(--hlong)', 'var(--hshort)')}
+        <div class="ref-hint">남은 비중 ${remainingPct.toFixed(1)}% · 남은 금액 ${fmtNum(remainingAmt)}원</div>
+        <div class="grid2">
+          <div class="field"><label>매도가격</label>
+            <input id="sell-price-${t.id}" placeholder="0" value="${esc(liveOr('sell-price-'+t.id, editingSell?formatPlain(String(editingSell.price)):''))}"/></div>
+          <div class="field"><label>매도비율(%)</label>
+            <input id="sell-pct-${t.id}" placeholder="0" value="${esc(liveOr('sell-pct-'+t.id, editingSell? String(editingSell.pct) : String(Number(remainingPct.toFixed(1)))))}"/></div>
+        </div>
+        <div class="save-row" style="margin-top:8px;">
+          <button class="ghost" data-action="cancel-sell-form" data-id="${t.id}">취소</button>
+          <button class="primary" data-action="save-sell" data-id="${t.id}" data-sell-id="${editingSell?editingSell.id:''}">${editingSell?'매도 수정 저장':'매도 저장'}</button>
+        </div>
+      </div>
+    ` : (remainingPct>0.0001 ? `
+      <button class="primary" style="margin-top:10px;width:100%;" data-action="toggle-sell-form" data-id="${t.id}">매도 기록하기</button>
+    ` : '');
+
+    const sellListHtml = sells.length>0 ? `
+      <div style="margin-top:10px;">
+        ${sells.map((s,i)=>{
+          const amt = sellRealizedAmount(t, s);
+          const pct = sellPnlPct(t, toNum(s.price))*100;
+          return `
+          <div class="ref-hint" style="border-left-color:${amt>=0?'var(--hlong)':'var(--hshort)'};display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
+            <span>${i+1}차 매도 · 가격 ${esc(s.price)} · 비율 ${s.pct}% · 손익 <b class="${amt>0?'pos':amt<0?'neg':'neu'}">${amt>0?'+':''}${fmtNum(amt)}원 (${pct>0?'+':''}${pct.toFixed(2)}%)</b></span>
+            <span style="display:flex;gap:8px;flex-shrink:0;">
+              <button class="del-btn" style="margin-top:0;color:var(--hdim)" data-action="edit-sell" data-id="${t.id}" data-sell-id="${s.id}">수정</button>
+              <button class="del-btn" style="margin-top:0;" data-action="delete-sell" data-id="${t.id}" data-sell-id="${s.id}">삭제</button>
+            </span>
+          </div>`;
+        }).join('')}
+      </div>
+    ` : '';
+
+    return `
+      <div class="trade-row ${t.dir}" data-action="toggle-row" data-id="${t.id}">
+        <div class="trade-top">
+          <span class="trade-name">${esc(t.ticker)}<span class="dir-badge ${t.dir}">${t.dir==='long'?'롱':'숏'}</span><a href="${tvUrl(t.ticker)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="text-decoration:none;font-size:12px;opacity:.85;" title="TradingView에서 보기">📈</a></span>
+          ${headerRight}
+        </div>
+        <div class="trade-date">${t.date} · 진입 ${esc(t.entry)}${t.amount?` · 투자금액 ${fmtNum(toNum(t.amount))}원`:''}</div>
+        ${open ? `
+        <div class="trade-detail" data-stop-propagation="1">
+          ${CATS.filter(c=> t.checklistNotes && t.checklistNotes[c.key]).map(c=>`<div class="q">${c.label}</div><div class="a">${esc(t.checklistNotes[c.key])}</div>`).join('')}
+          ${t.why?`<div class="q">왜 들어갔나</div><div class="a">${esc(t.why)}</div>`:''}
+          ${t.ruleKept?`<div class="q">규칙을 지켰나</div><div class="a">${esc(t.ruleKept)}</div>`:''}
+          ${t.mistake?`<div class="q">반복 실수</div><div class="a">${esc(t.mistake)}</div>`:''}
+          ${t.photos && t.photos.length>0 ? `
+          <div class="q">첨부 사진</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">
+            ${t.photos.map(p=>`<img src="${p}" data-action="view-photo" data-photo="${p}" style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid var(--hborder);cursor:zoom-in;"/>`).join('')}
+          </div>` : ''}
+          ${sellListHtml}
+          ${sellFormHtml}
+          <div style="display:flex;gap:14px;margin-top:10px;">
+            <button class="del-btn" style="color:var(--hdim)" data-action="edit-trade" data-id="${t.id}">수정</button>
+            <button class="del-btn" data-action="delete-trade" data-id="${t.id}">삭제</button>
+          </div>
+        </div>` : ''}
+      </div>
+    `;
+  }
+
+  function renderWithdrawalRow(w){
+    const open = w._open;
+    return `
+      <div class="trade-row" style="border-left-color:var(--haccent);" data-action="toggle-withdrawal-row" data-id="${w.id}">
+        <div class="trade-top">
+          <span class="trade-name" style="color:var(--haccent);">출금</span>
+          <span class="trade-pnl neg">-${fmtNum(toNum(w.amount))}원</span>
+        </div>
+        <div class="trade-date">${w.date}${w.memo?` · ${esc(w.memo)}`:''}</div>
+        ${open ? `
+        <div class="trade-detail" data-stop-propagation="1">
+          <button class="del-btn" style="margin-top:0;" data-action="delete-withdrawal" data-id="${w.id}">삭제</button>
+        </div>` : ''}
+      </div>
+    `;
+  }
+
+  function renderLogTab(){
+    const total = state.trades.length;
+    const openAmount = state.trades.reduce((s,t)=> s + tradeRemainingAmount(t), 0);
+    const totalPnl = state.trades.reduce((s,t)=> s + tradeRealizedPnl(t), 0);
+    const totalReturnPct = state.capital ? (totalPnl/state.capital*100) : 0;
+    const totalWithdrawn = state.withdrawals.reduce((s,w)=> s + (toNum(w.amount)||0), 0);
+    const equity = state.capital + totalPnl - totalWithdrawn;
+    const cashBalance = equity - openAmount;
+
+    const historyItems = [
+      ...state.trades.map(t=>({type:'trade', id:t.id, data:t})),
+      ...state.withdrawals.map(w=>({type:'withdrawal', id:w.id, data:w})),
+    ].sort((a,b)=> b.id - a.id);
+
+    return `
+      <div class="log-layout">
+        <div class="log-col-left">${renderTradeForm()}</div>
+        <div class="log-col-right">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding:10px 14px;background:var(--hbg);border:1px solid var(--hborder);border-radius:8px;">
+            <span style="font-size:12px;color:var(--hdim);">시작 자본금</span>
+            <span style="font-weight:700;color:var(--htext);">${fmtNum(state.capital)}원</span>
+          </div>
+
+          <div class="stats-row">
+            <div class="stat"><div class="k">잔액 (투자 가능)</div><div class="v">${fmtNum(cashBalance)}</div></div>
+            <div class="stat"><div class="k">투자중 금액</div><div class="v">${fmtNum(openAmount)}</div></div>
+            <div class="stat" style="cursor:pointer;" data-action="toggle-pnl-breakdown">
+              <div class="k">누적 손익 · 수익률 ${state.showPnlBreakdown?'▲':'▼'}</div>
+              <div class="v ${totalPnl>0?'pos':totalPnl<0?'neg':''}">${totalPnl>0?'+':''}${fmtNum(totalPnl)} <span style="font-size:13px;">(${totalReturnPct>0?'+':''}${totalReturnPct.toFixed(2)}%)</span></div>
+            </div>
+            <div class="stat">
+              <div class="k" style="display:flex;justify-content:space-between;align-items:center;">
+                <span>총 출금액</span>
+                <button class="ghost" style="padding:2px 9px;font-size:10px;" data-action="toggle-withdraw-form">수정</button>
+              </div>
+              <div class="v">${fmtNum(totalWithdrawn)}</div>
+            </div>
+          </div>
+
+          ${state.showPnlBreakdown ? `
+          <div style="margin-bottom:14px;padding:14px 16px;background:var(--hbg);border:1px solid var(--hborder);border-radius:8px;">
+            <div class="tabs" style="margin-bottom:12px;display:inline-flex;">
+              <div class="tab ${state.pnlView==='daily'?'active':''}" data-action="pnl-view" data-view="daily">일간</div>
+              <div class="tab ${state.pnlView==='weekly'?'active':''}" data-action="pnl-view" data-view="weekly">주간</div>
+              <div class="tab ${state.pnlView==='monthly'?'active':''}" data-action="pnl-view" data-view="monthly">월간</div>
+            </div>
+            ${(()=>{
+              const groups = groupPnlByPeriod(state.pnlView);
+              if(groups.length===0) return `<div class="empty" style="padding:16px 0;">아직 매도 기록이 없어요.</div>`;
+              return groups.map(g=>{
+                const pct = state.capital ? (g.pnl/state.capital*100) : 0;
+                return `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--hborder);font-size:13px;">
+                  <span style="color:var(--hdim);">${g.label}</span>
+                  <span class="${g.pnl>0?'pos':g.pnl<0?'neg':'neu'}" style="font-family:var(--mono);font-weight:700;">${g.pnl>0?'+':''}${fmtNum(g.pnl)}원 <span style="font-size:11px;opacity:.85;">(${pct>0?'+':''}${pct.toFixed(2)}%)</span></span>
+                </div>`;
+              }).join('');
+            })()}
+          </div>
+          ` : ''}
+
+          ${state.showWithdrawForm ? `
+          <div style="margin-bottom:14px;padding:14px 16px;background:var(--hbg);border:1px solid var(--hborder);border-radius:8px;">
+            <div class="card-head" style="padding-left:0;"><span class="cat-label" style="font-size:13px;color:var(--htext);">출금 기록</span></div>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <input id="withdraw-amount" placeholder="출금액" style="flex:1;font-family:var(--sans);background:var(--hbg2);border:1px solid var(--hborder);border-radius:8px;color:var(--htext);font-size:13.5px;padding:8px 10px;"/>
+              <button class="primary" data-action="save-withdrawal">출금 저장</button>
+            </div>
+          </div>
+          ` : ''}
+
+          <div class="history-panel">
+            <div class="section-title">기록 히스토리 (총 ${total}건 · 출금 ${state.withdrawals.length}건)</div>
+            ${historyItems.length===0
+              ? `<div class="empty">아직 기록이 없어요. 왼쪽에서 첫 매매를 기록해보세요.</div>`
+              : historyItems.map(item=> item.type==='trade' ? renderTradeRow(item.data) : renderWithdrawalRow(item.data)).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function bindEvents(){
+    document.querySelectorAll('[data-action="tab"]').forEach(el=>{
+      el.addEventListener('click', ()=>{ state.tab = el.dataset.tab; render(); });
+    });
+
+    // 저널(매매기록 페이지) 전환 드롭다운
+    document.querySelectorAll('[data-action="toggle-journal-dropdown"]').forEach(el=>{
+      el.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        state.journalDropdownOpen = !state.journalDropdownOpen;
+        render();
+      });
+    });
+    document.querySelectorAll('[data-action="select-journal"]').forEach(el=>{
+      el.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        switchJournal(el.dataset.id);
+      });
+    });
+    if(state.journalDropdownOpen){
+      document.addEventListener('click', function closeJournalDropdown(){
+        state.journalDropdownOpen = false;
+        document.removeEventListener('click', closeJournalDropdown);
+        render();
+      }, { once:true });
+    }
+
+    // settings
+    document.querySelectorAll('textarea[data-cat]').forEach(el=>{
+      el.addEventListener('input', ()=>{ state.settings[el.dataset.cat] = el.value; });
+    });
+    const saveSettingsBtn = document.querySelector('[data-action="save-settings"]');
+    if(saveSettingsBtn) saveSettingsBtn.addEventListener('click', async ()=>{
+      await storageSet('settings', state.settings);
+      state.savedFlash = true;
+      render();
+      setTimeout(()=>{ state.savedFlash=false; const m=document.querySelector('.saved-msg'); if(m) m.classList.remove('show'); },1800);
+    });
+
+    // withdrawal (총 출금액 옆 수정 버튼으로 폼 토글)
+    const toggleWithdrawBtn = document.querySelector('[data-action="toggle-withdraw-form"]');
+    if(toggleWithdrawBtn) toggleWithdrawBtn.addEventListener('click', (e)=>{ e.stopPropagation(); state.showWithdrawForm = !state.showWithdrawForm; render(); });
+
+    // 누적 손익/수익률 분석 패널
+    const togglePnlBtn = document.querySelector('[data-action="toggle-pnl-breakdown"]');
+    if(togglePnlBtn) togglePnlBtn.addEventListener('click', ()=>{ state.showPnlBreakdown = !state.showPnlBreakdown; render(); });
+    document.querySelectorAll('[data-action="pnl-view"]').forEach(el=>{
+      el.addEventListener('click', (e)=>{ e.stopPropagation(); state.pnlView = el.dataset.view; render(); });
+    });
+
+    const withdrawAmountEl = document.getElementById('withdraw-amount');
+    if(withdrawAmountEl) withdrawAmountEl.addEventListener('input', ()=>{ reformatWithCursor(withdrawAmountEl); });
+    const saveWithdrawalBtn = document.querySelector('[data-action="save-withdrawal"]');
+    if(saveWithdrawalBtn) saveWithdrawalBtn.addEventListener('click', async ()=>{
+      const input = document.getElementById('withdraw-amount');
+      const val = toNum(input.value);
+      if(isNaN(val) || val<=0){ alert('출금액을 정확히 입력해주세요.'); return; }
+      const w = { id: Date.now(), date: new Date().toISOString().slice(0,10), amount: val };
+      state.withdrawals = [w, ...state.withdrawals];
+      await storageSet('withdrawals', state.withdrawals.map(({_open, ...rest})=>rest));
+      state.showWithdrawForm = false;
+      render();
+    });
+    document.querySelectorAll('[data-action="toggle-withdrawal-row"]').forEach(el=>{
+      el.addEventListener('click', (e)=>{
+        if(e.target.closest('[data-stop-propagation]')) return;
+        const id = Number(el.dataset.id);
+        const w = state.withdrawals.find(w=>w.id===id);
+        if(w) w._open = !w._open;
+        render();
+      });
+    });
+    document.querySelectorAll('[data-action="delete-withdrawal"]').forEach(el=>{
+      el.addEventListener('click', async (e)=>{
+        e.stopPropagation();
+        if(!confirm('삭제하시겠습니까?')) return;
+        const id = Number(el.dataset.id);
+        state.withdrawals = state.withdrawals.filter(w=>w.id!==id);
+        await storageSet('withdrawals', state.withdrawals.map(({_open, ...rest})=>rest));
+        render();
+      });
+    });
+
+    // ticker custom dropdown
+    const toggleTickerDropdownBtn = document.querySelector('[data-action="toggle-ticker-dropdown"]');
+    if(toggleTickerDropdownBtn) toggleTickerDropdownBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      state.tickerDropdownOpen = !state.tickerDropdownOpen;
+      render();
+    });
+    document.querySelectorAll('[data-action="select-ticker-option"]').forEach(el=>{
+      el.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        state.ticker = el.dataset.ticker;
+        state.tickerDropdownOpen = false;
+        render();
+      });
+    });
+    const openAddTickerBtn = document.querySelector('[data-action="open-add-ticker"]');
+    if(openAddTickerBtn) openAddTickerBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      state.addingTicker = true;
+      state.tickerDropdownOpen = false;
+      render();
+    });
+    if(state.tickerDropdownOpen){
+      document.addEventListener('click', function closeDropdown(e){
+        state.tickerDropdownOpen = false;
+        document.removeEventListener('click', closeDropdown);
+        render();
+      }, { once:true });
+    }
+    const confirmAddBtn = document.querySelector('[data-action="confirm-add-ticker"]');
+    if(confirmAddBtn) confirmAddBtn.addEventListener('click', async ()=>{
+      const input = document.getElementById('f-newticker');
+      const v = (input.value||'').trim();
+      if(!v){ state.addingTicker=false; render(); return; }
+      const all = [...TICKER_PRESETS, ...state.customTickers];
+      if(!all.includes(v)){
+        state.customTickers = [...state.customTickers, v];
+        await storageSet('customTickers', state.customTickers);
+      }
+      state.ticker = v;
+      state.addingTicker = false;
+      render();
+    });
+    const cancelAddBtn = document.querySelector('[data-action="cancel-add-ticker"]');
+    if(cancelAddBtn) cancelAddBtn.addEventListener('click', ()=>{ state.addingTicker=false; render(); });
+    document.querySelectorAll('[data-action="delete-custom-ticker"]').forEach(el=>{
+      el.addEventListener('click', async (e)=>{
+        e.stopPropagation();
+        const ticker = el.dataset.ticker;
+        if(!confirm(`'${ticker}' 종목을 목록에서 삭제하시겠습니까?`)) return;
+        state.customTickers = state.customTickers.filter(t=>t!==ticker);
+        await storageSet('customTickers', state.customTickers);
+        if(state.ticker===ticker) state.ticker = '';
+        render();
+      });
+    });
+
+    // direction toggle
+    document.querySelectorAll('[data-action="set-dir"]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const editing = getEditingTrade();
+        if(editing){ editing.dir = el.dataset.dir; }
+        else { state.dir = el.dataset.dir; }
+        render();
+      });
+    });
+
+    // entry input: live comma formatting + re-render for live suggestion, preserving cursor
+    const entryInput = document.getElementById('f-entry');
+    if(entryInput) entryInput.addEventListener('input', ()=>{
+      reformatWithCursor(entryInput);
+      const cursorPos = entryInput.selectionStart;
+      const editing = getEditingTrade();
+      if(editing) editing.entry = entryInput.value;
+      render();
+      const again = document.getElementById('f-entry');
+      if(again){ again.focus(); again.setSelectionRange(cursorPos, cursorPos); }
+    });
+
+    // 사진 첨부 (복기)
+    const triggerPhotoBtn = document.querySelector('[data-action="trigger-photo-upload"]');
+    const photoInput = document.getElementById('f-photo-input');
+    if(triggerPhotoBtn && photoInput) triggerPhotoBtn.addEventListener('click', ()=>{ photoInput.click(); });
+    if(photoInput) photoInput.addEventListener('change', async (e)=>{
+      const files = Array.from(e.target.files || []);
+      const remaining = 4 - state.formPhotos.length;
+      if(remaining<=0){ alert('사진은 최대 4장까지 첨부할 수 있어요.'); return; }
+      const toProcess = files.slice(0, remaining);
+      if(files.length > toProcess.length){ alert('사진은 최대 4장까지만 첨부돼요. 앞의 몇 장만 추가할게요.'); }
+      for(const f of toProcess){
+        try{
+          const dataUrl = await resizeImageFile(f);
+          state.formPhotos.push(dataUrl);
+        }catch(err){ console.error('image resize error', err); }
+      }
+      render();
+    });
+    document.querySelectorAll('[data-action="remove-photo"]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const idx = Number(el.dataset.index);
+        state.formPhotos.splice(idx, 1);
+        render();
+      });
+    });
+    document.querySelectorAll('[data-action="view-photo"]').forEach(el=>{
+      el.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        state.viewingPhoto = el.dataset.photo;
+        render();
+      });
+    });
+    document.querySelectorAll('[data-action="close-photo-modal"]').forEach(el=>{
+      el.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        state.viewingPhoto = null;
+        render();
+      });
+    });
+
+    // amount input: live comma formatting (no re-render needed)
+    const amountInput = document.getElementById('f-amount');
+    if(amountInput) amountInput.addEventListener('input', ()=>{ reformatWithCursor(amountInput); });
+
+    // 익절/손절 기준(%): 수정 버튼 하나로 토글, 저장 버튼으로 둘 다 한번에 반영
+    document.querySelectorAll('[data-action="toggle-pct-edit"]').forEach(el=>{
+      el.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        state.editingPct = !state.editingPct;
+        render();
+      });
+    });
+    document.querySelectorAll('[data-action="save-pct-both"]').forEach(el=>{
+      el.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const ctx = el.dataset.ctx;
+        const targetInput = document.getElementById('edit-pct-target-'+ctx);
+        const stopInput = document.getElementById('edit-pct-stop-'+ctx);
+        const tv = toNum(targetInput.value);
+        const sv = toNum(stopInput.value);
+        if(!isNaN(tv) && tv>=0) state.targetPct = tv;
+        if(!isNaN(sv) && sv>=0) state.stopPct = sv;
+        storageSet('pctSettings', {target: state.targetPct, stop: state.stopPct});
+        state.editingPct = false;
+        render();
+      });
+    });
+    document.querySelectorAll('input[id^="edit-pct-target-"], input[id^="edit-pct-stop-"]').forEach(el=>{
+      el.addEventListener('keydown', (e)=>{
+        if(e.key==='Enter'){
+          e.preventDefault();
+          const ctx = el.id.replace(/^edit-pct-(target|stop)-/, '');
+          document.querySelector(`[data-action="save-pct-both"][data-ctx="${ctx}"]`)?.click();
+        }
+      });
+    });
+
+    // per-trade sell-price inputs: live comma formatting
+    document.querySelectorAll('input[id^="sell-price-"]').forEach(el=>{
+      el.addEventListener('input', ()=>{ reformatWithCursor(el); });
+    });
+
+    // checklist (5 system-setting categories, must all be confirmed to save)
+    document.querySelectorAll('[data-action="toggle-checklist"]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const cat = el.dataset.cat;
+        formChecklist[cat] = !(formChecklist[cat] ?? false);
+        render();
+      });
+    });
+    document.querySelectorAll('[data-checklist-note]').forEach(el=>{
+      el.addEventListener('input', ()=>{ formChecklistNotes[el.dataset.cat] = el.value; });
+    });
+
+    // cancel edit
+    const cancelEditBtn = document.querySelector('[data-action="cancel-edit"]');
+    if(cancelEditBtn) cancelEditBtn.addEventListener('click', ()=>{
+      state.editingId = null;
+      state.ticker = '';
+      state.dir = 'long';
+      state.formPhotos = [];
+      formChecklist = {}; formChecklistNotes = {};
+      render();
+    });
+
+    // save trade (add or update)
+    const saveTradeBtn = document.querySelector('[data-action="save-trade"]');
+    if(saveTradeBtn) saveTradeBtn.addEventListener('click', async ()=>{
+      const editing = getEditingTrade();
+      const ticker = state.ticker || (editing ? editing.ticker : '');
+      const entry = document.getElementById('f-entry').value;
+      if(!ticker || !entry){ alert('종목명 / 진입가는 필수예요.'); return; }
+
+      const checklist = {};
+      const checklistNotes = {};
+      CATS.forEach(c=>{
+        checklist[c.key] = formChecklist[c.key] ?? (editing && editing.checklist ? editing.checklist[c.key] : false) ?? false;
+        checklistNotes[c.key] = formChecklistNotes[c.key] ?? (editing && editing.checklistNotes ? editing.checklistNotes[c.key] : '') ?? '';
+      });
+      const allChecked = CATS.every(c=> checklist[c.key] === true);
+      if(!allChecked){ alert('체크리스트 5개 항목을 모두 확인해야 기록할 수 있어요.'); return; }
+
+      const amount = document.getElementById('f-amount').value;
+      const why = document.getElementById('f-why').value;
+      const ruleKept = document.getElementById('f-rulekept').value;
+      const mistake = document.getElementById('f-mistake').value;
+      const dir = editing ? editing.dir : state.dir;
+      const photos = state.formPhotos.slice();
+
+      if(editing){
+        Object.assign(editing, {ticker, dir, entry, amount, why, ruleKept, mistake, checklist, checklistNotes, photos});
+        await storageSet('trades', state.trades.map(({_open,_closing,_sellFormOpen,_editingSellId, ...rest})=>rest));
+        state.editingId = null;
+      } else {
+        const newTrade = {
+          id: Date.now(),
+          date: new Date().toISOString().slice(0,10),
+          ticker, dir, entry, amount, why, ruleKept, mistake, checklist, checklistNotes, photos,
+          sells: [],
+        };
+        state.trades = [newTrade, ...state.trades];
+        await storageSet('trades', state.trades.map(({_open,_closing,_sellFormOpen,_editingSellId, ...rest})=>rest));
+      }
+      state.ticker = '';
+      state.dir = 'long';
+      state.formPhotos = [];
+      formChecklist = {}; formChecklistNotes = {};
+      render();
+    });
+
+    // sell recording (분할매도 지원)
+    document.querySelectorAll('[data-action="apply-sell-price"]').forEach(el=>{
+      el.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const id = el.dataset.id;
+        const input = document.getElementById('sell-price-'+id);
+        if(input) input.value = el.dataset.value;
+      });
+    });
+    document.querySelectorAll('[data-action="toggle-sell-form"]').forEach(el=>{
+      el.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const id = Number(el.dataset.id);
+        const t = state.trades.find(t=>t.id===id);
+        if(t){ t._sellFormOpen = true; t._editingSellId = null; }
+        render();
+      });
+    });
+    document.querySelectorAll('[data-action="cancel-sell-form"]').forEach(el=>{
+      el.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const id = Number(el.dataset.id);
+        const t = state.trades.find(t=>t.id===id);
+        if(t){ t._sellFormOpen = false; t._editingSellId = null; }
+        render();
+      });
+    });
+    document.querySelectorAll('[data-action="edit-sell"]').forEach(el=>{
+      el.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const id = Number(el.dataset.id);
+        const sellId = Number(el.dataset.sellId);
+        const t = state.trades.find(t=>t.id===id);
+        if(t){ t._sellFormOpen = true; t._editingSellId = sellId; }
+        render();
+      });
+    });
+    document.querySelectorAll('[data-action="delete-sell"]').forEach(el=>{
+      el.addEventListener('click', async (e)=>{
+        e.stopPropagation();
+        if(!confirm('삭제하시겠습니까?')) return;
+        const id = Number(el.dataset.id);
+        const sellId = Number(el.dataset.sellId);
+        const t = state.trades.find(t=>t.id===id);
+        if(t){
+          t.sells = (t.sells||[]).filter(s=>s.id!==sellId);
+          if(t._editingSellId===sellId){ t._sellFormOpen=false; t._editingSellId=null; }
+        }
+        await storageSet('trades', state.trades.map(({_open,_closing,_sellFormOpen,_editingSellId, ...rest})=>rest));
+        render();
+      });
+    });
+    document.querySelectorAll('[data-action="save-sell"]').forEach(el=>{
+      el.addEventListener('click', async (e)=>{
+        e.stopPropagation();
+        const id = Number(el.dataset.id);
+        const t = state.trades.find(t=>t.id===id);
+        if(!t) return;
+        const priceInput = document.getElementById('sell-price-'+id);
+        const pctInput = document.getElementById('sell-pct-'+id);
+        const price = toNum(priceInput.value);
+        const pct = toNum(pctInput.value);
+        if(isNaN(price) || price<=0){ alert('매도가격을 정확히 입력해주세요.'); return; }
+        if(isNaN(pct) || pct<=0 || pct>100){ alert('매도비율을 1~100 사이로 입력해주세요.'); return; }
+        t.sells = t.sells || [];
+        const sellId = el.dataset.sellId ? Number(el.dataset.sellId) : null;
+        const othersTotal = t.sells.filter(s=>s.id!==sellId).reduce((s,x)=> s+(toNum(x.pct)||0), 0);
+        if(othersTotal + pct > 100.001){ alert(`매도 비율 합계가 100%를 넘을 수 없어요. (이미 ${othersTotal.toFixed(1)}% 매도됨)`); return; }
+        if(sellId){
+          const existing = t.sells.find(s=>s.id===sellId);
+          if(existing){ existing.price = price; existing.pct = pct; }
+        } else {
+          t.sells.push({ id: Date.now(), price, pct, date: new Date().toISOString().slice(0,10) });
+        }
+        t._sellFormOpen = false;
+        t._editingSellId = null;
+        await storageSet('trades', state.trades.map(({_open,_closing,_sellFormOpen,_editingSellId, ...rest})=>rest));
+        render();
+      });
+    });
+
+    // trade row toggle / edit / delete
+    document.querySelectorAll('[data-action="toggle-row"]').forEach(el=>{
+      el.addEventListener('click', (e)=>{
+        if(e.target.closest('[data-stop-propagation]')) return;
+        const id = Number(el.dataset.id);
+        const t = state.trades.find(t=>t.id===id);
+        if(t) t._open = !t._open;
+        render();
+      });
+    });
+    document.querySelectorAll('[data-action="edit-trade"]').forEach(el=>{
+      el.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        state.editingId = Number(el.dataset.id);
+        const t = state.trades.find(t=>t.id===state.editingId);
+        state.formPhotos = (t && t.photos) ? t.photos.slice() : [];
+        formChecklist = {}; formChecklistNotes = {};
+        render();
+      });
+    });
+    document.querySelectorAll('[data-action="delete-trade"]').forEach(el=>{
+      el.addEventListener('click', async (e)=>{
+        e.stopPropagation();
+        if(!confirm('삭제하시겠습니까?')) return;
+        const id = Number(el.dataset.id);
+        state.trades = state.trades.filter(t=>t.id!==id);
+        if(state.editingId===id) state.editingId = null;
+        await storageSet('trades', state.trades.map(({_open,_closing, ...rest})=>rest));
+        render();
+      });
+    });
+  }
+
+  let formChecklist = {};
+  let formChecklistNotes = {};
+
+  loadAll();
+})();
+</script>
+</body>
+</html>
