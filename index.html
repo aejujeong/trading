@@ -194,8 +194,18 @@
   .pos{color:var(--hlong);} .neg{color:var(--hshort);} .neu{color:var(--hdim);}
 </style>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function(){
+  const SUPABASE_URL = 'https://shqbuqxadshcymapdvdk.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNocWJ1cXhhZHNoY3ltYXBkdmRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5NDAyOTEsImV4cCI6MjEwMDUxNjI5MX0.IpsRUHbT1RqtxWgtWc1cRwQT0j1oSBa_tlAJgOh1Oy8';
+  let supabaseClient = null;
+  try{
+    if(window.supabase && window.supabase.createClient){
+      supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+  }catch(e){ console.error('supabase init failed', e); }
+
   const TICKER_PRESETS = ['비트코인','이더리움','SOXL','KOSPI','NAS100','삼성전자','하이닉스'];
   const TICKER_TV_MAP = {
     '비트코인': 'BINANCE:BTCUSDT',
@@ -418,6 +428,13 @@
   }
   async function storageGet(key, fallback){
     const k = nsKey(key);
+    if(supabaseClient){
+      try{
+        const { data, error } = await supabaseClient.from('app_data').select('value').eq('key', k).maybeSingle();
+        if(!error) return data ? data.value : fallback;
+        console.error('supabase get error', error);
+      }catch(e){ console.error('supabase get exception', e); }
+    }
     try{
       if(window.storage && window.storage.get){
         const r = await window.storage.get(k,false);
@@ -431,6 +448,13 @@
   }
   async function storageSet(key, value){
     const k = nsKey(key);
+    if(supabaseClient){
+      try{
+        const { error } = await supabaseClient.from('app_data').upsert({ key:k, value, updated_at:new Date().toISOString() });
+        if(!error) return;
+        console.error('supabase set error', error);
+      }catch(e){ console.error('supabase set exception', e); }
+    }
     try{
       if(window.storage && window.storage.set){
         await window.storage.set(k, JSON.stringify(value), false);
