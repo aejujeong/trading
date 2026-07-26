@@ -274,6 +274,9 @@
     formPhotos: [],
     viewingPhoto: null,
     mobileView: 'form',
+    usdtRate: 1380,
+    amountInputMode: 'krw',
+    editingUsdtRate: false,
     dir: 'long',
     savedFlash: false,
     showWithdrawForm: false,
@@ -379,9 +382,16 @@
     if(!entry) return 0;
     return t.dir==='long' ? (price-entry)/entry : (entry-price)/entry;
   }
+  function sellLeverage(sell){
+    const lev = toNum(sell.leverage);
+    return (!isNaN(lev) && lev>0) ? lev : 1;
+  }
+  function sellLeveragedPct(t, sell){
+    return sellPnlPct(t, toNum(sell.price)) * sellLeverage(sell);
+  }
   function sellRealizedAmount(t, sell){
     const portion = (toNum(t.amount)||0) * (toNum(sell.pct)||0) / 100;
-    return portion * sellPnlPct(t, toNum(sell.price));
+    return portion * sellLeveragedPct(t, sell);
   }
   function tradeRealizedPnl(t){
     return (t.sells||[]).reduce((s,x)=> s + sellRealizedAmount(t,x), 0);
@@ -507,6 +517,7 @@
     const pctSettings = await storageGet('pctSettings', {target:6, stop:2});
     state.targetPct = pctSettings.target ?? 6;
     state.stopPct = pctSettings.stop ?? 2;
+    state.usdtRate = await storageGet('usdtRate', 1380);
   }
 
   async function switchJournal(id){
@@ -521,6 +532,47 @@
     formChecklist = {}; formChecklistNotes = {};
     await loadJournalData();
     render();
+  }
+
+  async function exportAllData(){
+    const savedJournal = state.currentJournal;
+    const journalsList = state.journals && state.journals.length ? state.journals : DEFAULT_JOURNALS;
+    const backup = { exportedAt: new Date().toISOString(), journals: journalsList, data: {} };
+    for(const j of journalsList){
+      state.currentJournal = j.id;
+      backup.data[j.id] = {
+        settings: await storageGet('settings', {}),
+        trades: await storageGet('trades', []),
+        customTickers: await storageGet('customTickers', []),
+        capital: await storageGet('capital', 1000000),
+        withdrawals: await storageGet('withdrawals', []),
+        pctSettings: await storageGet('pctSettings', {target:6, stop:2}),
+        usdtRate: await storageGet('usdtRate', 1380),
+      };
+    }
+    state.currentJournal = savedJournal;
+    return backup;
+  }
+
+  async function importAllData(backup){
+    if(!backup || typeof backup!=='object' || !backup.data) throw new Error('invalid backup file');
+    const savedJournal = state.currentJournal;
+    const journalsList = (backup.journals && backup.journals.length) ? backup.journals : DEFAULT_JOURNALS;
+    state.journals = journalsList;
+    await storageSet('journals', journalsList);
+    for(const jid of Object.keys(backup.data)){
+      state.currentJournal = jid;
+      const d = backup.data[jid] || {};
+      await storageSet('settings', d.settings || {});
+      await storageSet('trades', d.trades || []);
+      await storageSet('customTickers', d.customTickers || []);
+      await storageSet('capital', d.capital!=null ? d.capital : 1000000);
+      await storageSet('withdrawals', d.withdrawals || []);
+      await storageSet('pctSettings', d.pctSettings || {target:6, stop:2});
+      await storageSet('usdtRate', d.usdtRate!=null ? d.usdtRate : 1380);
+    }
+    state.currentJournal = savedJournal;
+    await loadJournalData();
   }
 
   function getEditingTrade(){
@@ -576,6 +628,18 @@
       <div class="save-row">
         <span class="saved-msg ${state.savedFlash?'show':''}">저장됨</span>
         <button class="primary" data-action="save-settings">설정 저장</button>
+      </div>
+
+      <div class="section-title on-bg" style="margin-top:36px;">데이터 백업 (전체 저널 포함)</div>
+      <div class="card">
+        <div class="cat-sub" style="padding-left:0;margin-bottom:14px;">
+          홈페이지를 새로 배포하거나 실수로 데이터가 사라졌을 때를 대비해서, 지금 저장된 모든 기록을 파일 하나로 내려받아 따로 보관할 수 있어요. 나중에 이 파일로 그대로 복원도 가능해요.
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="primary" data-action="export-backup">백업 파일 다운로드</button>
+          <button class="ghost" data-action="trigger-import-backup">백업 파일 불러오기</button>
+          <input type="file" id="import-backup-input" accept="application/json" style="display:none"/>
+        </div>
       </div>
     `;
   }
@@ -675,9 +739,35 @@
           </div>
         </div>
 
-        <div class="grid2">
-          <div class="field"><label>진입가</label><input id="f-entry" data-action="entry-input" inputmode="decimal" value="${esc(formatPlain(entryVal))}" placeholder="0"/></div>
-          <div class="field"><label>총 투자금액</label><input id="f-amount" inputmode="decimal" value="${esc(formatPlain(liveOr('f-amount', editing?editing.amount:'')))}" placeholder="0"/></div>
+        <div class="field"><label>진입가</label><input id="f-entry" data-action="entry-input" inputmode="decimal" value="${esc(formatPlain(entryVal))}" placeholder="0"/></div>
+
+        <div class="field">
+          <label style="display:flex;justify-content:space-between;align-items:center;">
+            <span>총 투자금액</span>
+            <button class="ghost" type="button" style="padding:2px 9px;font-size:10px;" data-action="toggle-amount-mode">${state.amountInputMode==='usdt'?'KRW로 입력':'USDT로 입력'}</button>
+          </label>
+          ${state.amountInputMode==='usdt' ? (()=>{
+            const usdtVal = liveOr('f-amount-usdt', editing && editing.amountUsdt ? editing.amountUsdt : '');
+            const usdtNum = toNum(usdtVal);
+            const computedKrw = !isNaN(usdtNum) ? usdtNum * (toNum(state.usdtRate)||0) : null;
+            return `
+            <input id="f-amount-usdt" inputmode="decimal" value="${esc(formatPlain(usdtVal))}" placeholder="예: 140"/>
+            <div class="ref-hint" style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+              <span>1 USDT = ${fmtNum(state.usdtRate)}원
+                <button class="ghost" type="button" style="padding:1px 7px;font-size:9.5px;margin-left:4px;" data-action="toggle-rate-edit">수정</button>
+                <button class="ghost" type="button" style="padding:1px 7px;font-size:9.5px;margin-left:2px;" data-action="fetch-usdt-rate">실시간</button>
+              </span>
+              ${computedKrw!=null ? `<b style="font-family:var(--mono);">≈ ${fmtNum(computedKrw)}원</b>` : ''}
+            </div>
+            ${state.editingUsdtRate ? `
+            <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
+              <input id="edit-usdt-rate" inputmode="decimal" value="${esc(formatPlain(liveOr('edit-usdt-rate', state.usdtRate)))}" placeholder="환율" style="flex:1;"/>
+              <button class="primary" type="button" data-action="save-usdt-rate">저장</button>
+            </div>` : ''}
+            `;
+          })() : `
+            <input id="f-amount" inputmode="decimal" value="${esc(formatPlain(liveOr('f-amount', editing?editing.amount:'')))}" placeholder="0"/>
+          `}
         </div>
 
         ${renderPctSuggestBox(calcTargets(dir, entryVal), null, 'var(--long)', 'var(--short)')}
@@ -768,6 +858,8 @@
           <div class="field"><label>매도비율(%)</label>
             <input id="sell-pct-${t.id}" inputmode="decimal" placeholder="0" value="${esc(liveOr('sell-pct-'+t.id, editingSell? String(editingSell.pct) : String(Number(remainingPct.toFixed(1)))))}"/></div>
         </div>
+        <div class="field"><label>레버리지 (배수, 안 썼으면 1)</label>
+          <input id="sell-leverage-${t.id}" inputmode="decimal" placeholder="1" value="${esc(liveOr('sell-leverage-'+t.id, editingSell && editingSell.leverage ? String(editingSell.leverage) : '1'))}"/></div>
         <div class="save-row" style="margin-top:8px;">
           <button class="ghost" data-action="cancel-sell-form" data-id="${t.id}">취소</button>
           <button class="primary" data-action="save-sell" data-id="${t.id}" data-sell-id="${editingSell?editingSell.id:''}">${editingSell?'매도 수정 저장':'매도 저장'}</button>
@@ -781,10 +873,11 @@
       <div style="margin-top:10px;">
         ${sells.map((s,i)=>{
           const amt = sellRealizedAmount(t, s);
-          const pct = sellPnlPct(t, toNum(s.price))*100;
+          const pct = sellLeveragedPct(t, s)*100;
+          const lev = sellLeverage(s);
           return `
           <div class="ref-hint" style="border-left-color:${amt>=0?'var(--hlong)':'var(--hshort)'};display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
-            <span>${i+1}차 매도 · 가격 ${esc(s.price)} · 비율 ${s.pct}% · 손익 <b class="${amt>0?'pos':amt<0?'neg':'neu'}">${amt>0?'+':''}${fmtNum(amt)}원 (${pct>0?'+':''}${pct.toFixed(2)}%)</b></span>
+            <span>${i+1}차 매도 · 가격 ${esc(s.price)} · 비율 ${s.pct}%${lev!==1?` · ${lev}배`:''} · 손익 <b class="${amt>0?'pos':amt<0?'neg':'neu'}">${amt>0?'+':''}${fmtNum(amt)}원 (${pct>0?'+':''}${pct.toFixed(2)}%)</b></span>
             <span style="display:flex;gap:8px;flex-shrink:0;">
               <button class="del-btn" style="margin-top:0;color:var(--hdim)" data-action="edit-sell" data-id="${t.id}" data-sell-id="${s.id}">수정</button>
               <button class="del-btn" style="margin-top:0;" data-action="delete-sell" data-id="${t.id}" data-sell-id="${s.id}">삭제</button>
@@ -800,7 +893,7 @@
           <span class="trade-name">${esc(t.ticker)}<span class="dir-badge ${t.dir}">${t.dir==='long'?'롱':'숏'}</span><a href="${tvUrl(t.ticker)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="text-decoration:none;font-size:12px;opacity:.85;" title="TradingView에서 보기">📈</a></span>
           ${headerRight}
         </div>
-        <div class="trade-date">${t.date} · 진입 ${esc(t.entry)}${t.amount?` · 투자금액 ${fmtNum(toNum(t.amount))}원`:''}</div>
+        <div class="trade-date">${t.date} · 진입 ${esc(t.entry)}${t.amount?` · 투자금액 ${fmtNum(toNum(t.amount))}원${t.amountUsdt?` (${fmtNum(t.amountUsdt)} USDT)`:''}`:''}</div>
         ${open ? `
         <div class="trade-detail" data-stop-propagation="1">
           ${CATS.filter(c=> t.checklistNotes && t.checklistNotes[c.key]).map(c=>`<div class="q">${c.label}</div><div class="a">${esc(t.checklistNotes[c.key])}</div>`).join('')}
@@ -980,6 +1073,54 @@
       setTimeout(()=>{ state.savedFlash=false; const m=document.querySelector('.saved-msg'); if(m) m.classList.remove('show'); },1800);
     });
 
+    // 데이터 백업(내보내기) / 복원(가져오기)
+    const exportBtn = document.querySelector('[data-action="export-backup"]');
+    if(exportBtn) exportBtn.addEventListener('click', async ()=>{
+      const originalText = exportBtn.textContent;
+      exportBtn.textContent = '준비중...';
+      try{
+        const backup = await exportAllData();
+        const blob = new Blob([JSON.stringify(backup, null, 2)], { type:'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const dateStr = new Date().toISOString().slice(0,10);
+        a.href = url;
+        a.download = `trading-journal-backup-${dateStr}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }catch(e){
+        console.error(e);
+        alert('백업 파일을 만드는 중 문제가 생겼어요.');
+      } finally {
+        exportBtn.textContent = originalText;
+      }
+    });
+    const triggerImportBtn = document.querySelector('[data-action="trigger-import-backup"]');
+    const importInput = document.getElementById('import-backup-input');
+    if(triggerImportBtn && importInput) triggerImportBtn.addEventListener('click', ()=>{ importInput.click(); });
+    if(importInput) importInput.addEventListener('change', async (e)=>{
+      const file = e.target.files && e.target.files[0];
+      if(!file) return;
+      if(!confirm('백업 파일을 불러오면 현재 저장된 모든 저널의 데이터를 백업 시점 내용으로 덮어써요. 계속할까요?')){
+        importInput.value = '';
+        return;
+      }
+      try{
+        const text = await file.text();
+        const backup = JSON.parse(text);
+        await importAllData(backup);
+        alert('백업을 불러왔어요.');
+        render();
+      }catch(err){
+        console.error(err);
+        alert('백업 파일을 읽는 중 문제가 생겼어요. 파일이 올바른지 확인해주세요.');
+      } finally {
+        importInput.value = '';
+      }
+    });
+
     // withdrawal (총 출금액 옆 수정 버튼으로 폼 토글)
     const toggleWithdrawBtn = document.querySelector('[data-action="toggle-withdraw-form"]');
     if(toggleWithdrawBtn) toggleWithdrawBtn.addEventListener('click', (e)=>{ e.stopPropagation(); state.showWithdrawForm = !state.showWithdrawForm; render(); });
@@ -1146,6 +1287,58 @@
     // amount input: live comma formatting (no re-render needed)
     const amountInput = document.getElementById('f-amount');
     if(amountInput) amountInput.addEventListener('input', ()=>{ reformatWithCursor(amountInput); });
+    const amountUsdtInput = document.getElementById('f-amount-usdt');
+    if(amountUsdtInput) amountUsdtInput.addEventListener('input', ()=>{
+      reformatWithCursor(amountUsdtInput);
+      const cursorPos = amountUsdtInput.selectionStart;
+      render();
+      const again = document.getElementById('f-amount-usdt');
+      if(again){ again.focus(); again.setSelectionRange(cursorPos, cursorPos); }
+    });
+
+    // USDT 투자금액 입력 모드
+    const toggleAmountModeBtn = document.querySelector('[data-action="toggle-amount-mode"]');
+    if(toggleAmountModeBtn) toggleAmountModeBtn.addEventListener('click', ()=>{
+      state.amountInputMode = state.amountInputMode==='usdt' ? 'krw' : 'usdt';
+      render();
+    });
+    const toggleRateEditBtn = document.querySelector('[data-action="toggle-rate-edit"]');
+    if(toggleRateEditBtn) toggleRateEditBtn.addEventListener('click', ()=>{
+      state.editingUsdtRate = !state.editingUsdtRate;
+      render();
+    });
+    const editUsdtRateInput = document.getElementById('edit-usdt-rate');
+    if(editUsdtRateInput) editUsdtRateInput.addEventListener('input', ()=>{ reformatWithCursor(editUsdtRateInput); });
+    const saveUsdtRateBtn = document.querySelector('[data-action="save-usdt-rate"]');
+    if(saveUsdtRateBtn) saveUsdtRateBtn.addEventListener('click', async ()=>{
+      const val = toNum(document.getElementById('edit-usdt-rate').value);
+      if(isNaN(val) || val<=0){ alert('환율을 정확히 입력해주세요.'); return; }
+      state.usdtRate = val;
+      await storageSet('usdtRate', val);
+      state.editingUsdtRate = false;
+      render();
+    });
+    const fetchRateBtn = document.querySelector('[data-action="fetch-usdt-rate"]');
+    if(fetchRateBtn) fetchRateBtn.addEventListener('click', async ()=>{
+      const originalText = fetchRateBtn.textContent;
+      fetchRateBtn.textContent = '조회중...';
+      try{
+        const res = await fetch('https://api.upbit.com/v1/ticker?markets=KRW-USDT');
+        const data = await res.json();
+        const price = data && data[0] && data[0].trade_price;
+        if(price){
+          state.usdtRate = price;
+          await storageSet('usdtRate', price);
+          render();
+        } else {
+          alert('환율을 가져오지 못했어요. 직접 입력해주세요.');
+        }
+      }catch(e){
+        alert('실시간 환율 조회에 실패했어요 (네트워크 문제일 수 있어요). 직접 입력해주세요.');
+      } finally {
+        if(fetchRateBtn) fetchRateBtn.textContent = originalText;
+      }
+    });
 
     // 익절/손절 기준(%): 수정 버튼 하나로 토글, 저장 버튼으로 둘 다 한번에 반영
     document.querySelectorAll('[data-action="toggle-pct-edit"]').forEach(el=>{
@@ -1204,6 +1397,7 @@
       state.ticker = '';
       state.dir = 'long';
       state.formPhotos = [];
+      state.amountInputMode = 'krw';
       formChecklist = {}; formChecklistNotes = {};
       render();
     });
@@ -1225,7 +1419,17 @@
       const allChecked = CATS.every(c=> checklist[c.key] === true);
       if(!allChecked){ alert('체크리스트 5개 항목을 모두 확인해야 기록할 수 있어요.'); return; }
 
-      const amount = document.getElementById('f-amount').value;
+      let amount, amountUsdt = null, usdtRateUsed = null;
+      if(state.amountInputMode==='usdt'){
+        const usdtInput = document.getElementById('f-amount-usdt');
+        const usdtNum = toNum(usdtInput ? usdtInput.value : '');
+        if(isNaN(usdtNum) || usdtNum<=0){ alert('USDT 수량을 정확히 입력해주세요.'); return; }
+        amountUsdt = usdtNum;
+        usdtRateUsed = toNum(state.usdtRate) || 0;
+        amount = String(Math.round(usdtNum * usdtRateUsed));
+      } else {
+        amount = document.getElementById('f-amount').value;
+      }
       const why = document.getElementById('f-why').value;
       const ruleKept = document.getElementById('f-rulekept').value;
       const mistake = document.getElementById('f-mistake').value;
@@ -1233,14 +1437,14 @@
       const photos = state.formPhotos.slice();
 
       if(editing){
-        Object.assign(editing, {ticker, dir, entry, amount, why, ruleKept, mistake, checklist, checklistNotes, photos});
+        Object.assign(editing, {ticker, dir, entry, amount, amountUsdt, usdtRateUsed, why, ruleKept, mistake, checklist, checklistNotes, photos});
         await storageSet('trades', state.trades.map(({_open,_closing,_sellFormOpen,_editingSellId, ...rest})=>rest));
         state.editingId = null;
       } else {
         const newTrade = {
           id: Date.now(),
           date: new Date().toISOString().slice(0,10),
-          ticker, dir, entry, amount, why, ruleKept, mistake, checklist, checklistNotes, photos,
+          ticker, dir, entry, amount, amountUsdt, usdtRateUsed, why, ruleKept, mistake, checklist, checklistNotes, photos,
           sells: [],
         };
         state.trades = [newTrade, ...state.trades];
@@ -1249,6 +1453,7 @@
       state.ticker = '';
       state.dir = 'long';
       state.formPhotos = [];
+      state.amountInputMode = 'krw';
       formChecklist = {}; formChecklistNotes = {};
       render();
     });
@@ -1313,8 +1518,11 @@
         if(!t) return;
         const priceInput = document.getElementById('sell-price-'+id);
         const pctInput = document.getElementById('sell-pct-'+id);
+        const leverageInput = document.getElementById('sell-leverage-'+id);
         const price = toNum(priceInput.value);
         const pct = toNum(pctInput.value);
+        let leverage = leverageInput ? toNum(leverageInput.value) : 1;
+        if(isNaN(leverage) || leverage<=0) leverage = 1;
         if(isNaN(price) || price<=0){ alert('매도가격을 정확히 입력해주세요.'); return; }
         if(isNaN(pct) || pct<=0 || pct>100){ alert('매도비율을 1~100 사이로 입력해주세요.'); return; }
         t.sells = t.sells || [];
@@ -1323,9 +1531,9 @@
         if(othersTotal + pct > 100.001){ alert(`매도 비율 합계가 100%를 넘을 수 없어요. (이미 ${othersTotal.toFixed(1)}% 매도됨)`); return; }
         if(sellId){
           const existing = t.sells.find(s=>s.id===sellId);
-          if(existing){ existing.price = price; existing.pct = pct; }
+          if(existing){ existing.price = price; existing.pct = pct; existing.leverage = leverage; }
         } else {
-          t.sells.push({ id: Date.now(), price, pct, date: new Date().toISOString().slice(0,10) });
+          t.sells.push({ id: Date.now(), price, pct, leverage, date: new Date().toISOString().slice(0,10) });
         }
         t._sellFormOpen = false;
         t._editingSellId = null;
@@ -1350,6 +1558,7 @@
         state.editingId = Number(el.dataset.id);
         const t = state.trades.find(t=>t.id===state.editingId);
         state.formPhotos = (t && t.photos) ? t.photos.slice() : [];
+        state.amountInputMode = (t && t.amountUsdt) ? 'usdt' : 'krw';
         formChecklist = {}; formChecklistNotes = {};
         render();
       });
