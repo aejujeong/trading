@@ -238,6 +238,8 @@
     if(symbol) return `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(symbol)}`;
     return `https://www.tradingview.com/symbols/${encodeURIComponent(ticker)}/`;
   }
+  const BROKER_LIST = ['OKX', '나무증권', '키움증권'];
+  const DEFAULT_FEE_RATES = { 'OKX': 0.08, '나무증권': 0.015, '키움증권': 0.015 };
   const CATS = [
     {key:'기본환경', label:'기본 환경', sub:'주력 종목 / 시간축 / 매매 가능 시간 / 주력 방향', color:'var(--text)'},
     {key:'진입조건', label:'진입 조건', sub:'시장 상태 / 주요 자리 / 지표 / 캔들·거래량 반응', color:'var(--accent)'},
@@ -277,6 +279,9 @@
     usdtRate: 1380,
     amountInputMode: 'krw',
     editingUsdtRate: false,
+    broker: '',
+    feeRates: {...DEFAULT_FEE_RATES},
+    editingFeeRate: false,
     dir: 'long',
     savedFlash: false,
     showWithdrawForm: false,
@@ -395,7 +400,12 @@
   }
   function sellRealizedAmount(t, sell){
     const portion = (toNum(t.amount)||0) * (toNum(sell.pct)||0) / 100;
-    return portion * sellLeveragedPct(t, sell);
+    const rawPnl = portion * sellLeveragedPct(t, sell);
+    const feeRatePct = toNum(t.feeRatePct) || 0;
+    if(feeRatePct<=0) return rawPnl;
+    const sellNotional = portion + rawPnl;
+    const fee = (portion + sellNotional) * (feeRatePct/100);
+    return rawPnl - fee;
   }
   function tradeRealizedPnl(t){
     return (t.sells||[]).reduce((s,x)=> s + sellRealizedAmount(t,x), 0);
@@ -522,6 +532,7 @@
     state.targetPct = pctSettings.target ?? 6;
     state.stopPct = pctSettings.stop ?? 2;
     state.usdtRate = await storageGet('usdtRate', 1380);
+    state.feeRates = await storageGet('feeRates', {...DEFAULT_FEE_RATES});
   }
 
   async function switchJournal(id){
@@ -693,10 +704,14 @@
 
   function renderTradeForm(){
     const editing = getEditingTrade();
+    const sessionKey = editing ? ('edit-'+editing.id) : ('new-'+newFormGeneration);
+    const sessionChanged = (lastFormSession !== sessionKey);
+    lastFormSession = sessionKey;
+    const fieldVal = (id, fallback) => sessionChanged ? (fallback ?? '') : liveOr(id, fallback);
     const currentTicker = state.ticker || (editing ? editing.ticker : '');
     const allTickers = [...TICKER_PRESETS, ...state.customTickers];
     const dir = editing ? editing.dir : state.dir;
-    const entryVal = editing ? liveOr('f-entry', editing.entry) : liveOr('f-entry', '');
+    const entryVal = fieldVal('f-entry', editing ? editing.entry : '');
     const hasSettings = state.settings.진입조건 || state.settings.리스크;
 
     const tickerField = state.addingTicker ? `
@@ -751,7 +766,7 @@
             <button class="ghost" type="button" style="padding:2px 9px;font-size:10px;" data-action="toggle-amount-mode">${state.amountInputMode==='usdt'?'KRW로 입력':'USDT로 입력'}</button>
           </label>
           ${state.amountInputMode==='usdt' ? (()=>{
-            const usdtVal = liveOr('f-amount-usdt', editing && editing.amountUsdt ? editing.amountUsdt : '');
+            const usdtVal = fieldVal('f-amount-usdt', editing && editing.amountUsdt ? editing.amountUsdt : '');
             const usdtNum = toNum(usdtVal);
             const computedKrw = !isNaN(usdtNum) ? usdtNum * (toNum(state.usdtRate)||0) : null;
             return `
@@ -770,11 +785,32 @@
             </div>` : ''}
             `;
           })() : `
-            <input id="f-amount" inputmode="decimal" value="${esc(formatPlain(liveOr('f-amount', editing?editing.amount:'')))}" placeholder="0"/>
+            <input id="f-amount" inputmode="decimal" value="${esc(formatPlain(fieldVal('f-amount', editing?editing.amount:'')))}" placeholder="0"/>
           `}
         </div>
 
-        ${renderPctSuggestBox(calcTargets(dir, entryVal), null, 'var(--long)', 'var(--short)')}
+        <div class="field">
+          <label style="display:flex;justify-content:space-between;align-items:center;">
+            <span>거래처 (매매 수수료 반영, 선택)</span>
+            ${(state.broker || (editing && editing.broker)) ? `<button class="ghost" type="button" style="padding:1px 7px;font-size:9.5px;" data-action="toggle-fee-edit">수수료율 수정</button>` : ''}
+          </label>
+          <div class="dir-toggle" style="flex-wrap:wrap;">
+            <div class="dir-btn ${(!state.broker && !(editing&&editing.broker))?'long-active':''}" data-action="set-broker" data-broker="">없음</div>
+            ${BROKER_LIST.map(b=>`<div class="dir-btn ${((state.broker||(editing&&editing.broker))===b)?'long-active':''}" data-action="set-broker" data-broker="${esc(b)}">${esc(b)}</div>`).join('')}
+          </div>
+          ${(()=>{
+            const curBroker = state.broker || (editing ? editing.broker : '') || '';
+            if(!curBroker) return '';
+            const curRate = state.feeRates[curBroker] ?? DEFAULT_FEE_RATES[curBroker] ?? 0;
+            return state.editingFeeRate ? `
+              <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
+                <input id="edit-fee-rate" inputmode="decimal" value="${esc(formatPlain(liveOr('edit-fee-rate', curRate)))}" placeholder="수수료율(%)" style="flex:1;"/>
+                <button class="primary" type="button" data-action="save-fee-rate" data-broker="${esc(curBroker)}">저장</button>
+              </div>
+            ` : `<div class="ref-hint" style="margin-top:8px;">${esc(curBroker)} 수수료율: ${curRate}% (매수+매도 왕복 반영)</div>`;
+          })()}
+        </div>
+
 
         <div class="section-title" style="margin-top:20px;">체크리스트 (5개 모두 확인해야 저장돼요)</div>
         ${CATS.map(c=>{
@@ -800,13 +836,13 @@
 
         <div class="section-title" style="margin-top:20px;">복기</div>
         <div class="field"><label>왜 들어갔나</label>
-          <textarea id="f-why" style="min-height:44px;font-family:var(--sans)" placeholder="진입 이유...">${esc(liveOr('f-why', editing?editing.why:''))}</textarea>
+          <textarea id="f-why" style="min-height:44px;font-family:var(--sans)" placeholder="진입 이유...">${esc(fieldVal('f-why', editing?editing.why:''))}</textarea>
         </div>
         <div class="field"><label>규칙을 지켰나</label>
-          <textarea id="f-rulekept" style="min-height:44px;font-family:var(--sans)" placeholder="지킨 점 / 못 지킨 점...">${esc(liveOr('f-rulekept', editing?editing.ruleKept:''))}</textarea>
+          <textarea id="f-rulekept" style="min-height:44px;font-family:var(--sans)" placeholder="지킨 점 / 못 지킨 점...">${esc(fieldVal('f-rulekept', editing?editing.ruleKept:''))}</textarea>
         </div>
         <div class="field"><label>반복되는 실수는 무엇인가</label>
-          <textarea id="f-mistake" style="min-height:44px;font-family:var(--sans)" placeholder="패턴을 적어두세요...">${esc(liveOr('f-mistake', editing?editing.mistake:''))}</textarea>
+          <textarea id="f-mistake" style="min-height:44px;font-family:var(--sans)" placeholder="패턴을 적어두세요...">${esc(fieldVal('f-mistake', editing?editing.mistake:''))}</textarea>
         </div>
 
         <div class="field">
@@ -877,7 +913,8 @@
       <div style="margin-top:10px;">
         ${sells.map((s,i)=>{
           const amt = sellRealizedAmount(t, s);
-          const pct = sellLeveragedPct(t, s)*100;
+          const portion = (toNum(t.amount)||0) * (toNum(s.pct)||0) / 100;
+          const pct = portion ? (amt/portion*100) : 0;
           const lev = sellLeverage(s);
           return `
           <div class="ref-hint" style="border-left-color:${amt>=0?'var(--hlong)':'var(--hshort)'};display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
@@ -1236,6 +1273,34 @@
       });
     });
 
+    // 거래처(수수료) 선택
+    document.querySelectorAll('[data-action="set-broker"]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const editing = getEditingTrade();
+        if(editing){ editing.broker = el.dataset.broker; }
+        else { state.broker = el.dataset.broker; }
+        state.editingFeeRate = false;
+        render();
+      });
+    });
+    const toggleFeeEditBtn = document.querySelector('[data-action="toggle-fee-edit"]');
+    if(toggleFeeEditBtn) toggleFeeEditBtn.addEventListener('click', ()=>{
+      state.editingFeeRate = !state.editingFeeRate;
+      render();
+    });
+    const editFeeRateInput = document.getElementById('edit-fee-rate');
+    if(editFeeRateInput) editFeeRateInput.addEventListener('input', ()=>{ reformatWithCursor(editFeeRateInput); });
+    const saveFeeRateBtn = document.querySelector('[data-action="save-fee-rate"]');
+    if(saveFeeRateBtn) saveFeeRateBtn.addEventListener('click', async ()=>{
+      const broker = saveFeeRateBtn.dataset.broker;
+      const val = toNum(document.getElementById('edit-fee-rate').value);
+      if(isNaN(val) || val<0){ alert('수수료율을 정확히 입력해주세요.'); return; }
+      state.feeRates = {...state.feeRates, [broker]: val};
+      await storageSet('feeRates', state.feeRates);
+      state.editingFeeRate = false;
+      render();
+    });
+
     // entry input: live comma formatting + re-render for live suggestion, preserving cursor
     const entryInput = document.getElementById('f-entry');
     if(entryInput) entryInput.addEventListener('input', ()=>{
@@ -1403,6 +1468,8 @@
       state.dir = 'long';
       state.formPhotos = [];
       state.amountInputMode = 'krw';
+      state.broker = '';
+      state.editingFeeRate = false;
       formChecklist = {}; formChecklistNotes = {};
       render();
     });
@@ -1440,25 +1507,30 @@
       const mistake = document.getElementById('f-mistake').value;
       const dir = editing ? editing.dir : state.dir;
       const photos = state.formPhotos.slice();
+      const broker = state.broker || (editing ? editing.broker : '') || '';
+      const feeRatePct = broker ? (state.feeRates[broker] ?? DEFAULT_FEE_RATES[broker] ?? 0) : 0;
 
       if(editing){
-        Object.assign(editing, {ticker, dir, entry, amount, amountUsdt, usdtRateUsed, why, ruleKept, mistake, checklist, checklistNotes, photos});
+        Object.assign(editing, {ticker, dir, entry, amount, amountUsdt, usdtRateUsed, why, ruleKept, mistake, checklist, checklistNotes, photos, broker, feeRatePct});
         await storageSet('trades', state.trades.map(({_open,_closing,_sellFormOpen,_editingSellId, ...rest})=>rest));
         state.editingId = null;
       } else {
         const newTrade = {
           id: Date.now(),
           date: new Date().toISOString().slice(0,10),
-          ticker, dir, entry, amount, amountUsdt, usdtRateUsed, why, ruleKept, mistake, checklist, checklistNotes, photos,
+          ticker, dir, entry, amount, amountUsdt, usdtRateUsed, why, ruleKept, mistake, checklist, checklistNotes, photos, broker, feeRatePct,
           sells: [],
         };
         state.trades = [newTrade, ...state.trades];
         await storageSet('trades', state.trades.map(({_open,_closing,_sellFormOpen,_editingSellId, ...rest})=>rest));
+        newFormGeneration++;
       }
       state.ticker = '';
       state.dir = 'long';
       state.formPhotos = [];
       state.amountInputMode = 'krw';
+      state.broker = '';
+      state.editingFeeRate = false;
       formChecklist = {}; formChecklistNotes = {};
       render();
     });
@@ -1564,6 +1636,8 @@
         const t = state.trades.find(t=>t.id===state.editingId);
         state.formPhotos = (t && t.photos) ? t.photos.slice() : [];
         state.amountInputMode = (t && t.amountUsdt) ? 'usdt' : 'krw';
+        state.broker = '';
+        state.editingFeeRate = false;
         formChecklist = {}; formChecklistNotes = {};
         render();
       });
@@ -1583,6 +1657,8 @@
 
   let formChecklist = {};
   let formChecklistNotes = {};
+  let lastFormSession = null;
+  let newFormGeneration = 0;
 
   loadAll();
 })();
