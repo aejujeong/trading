@@ -298,6 +298,10 @@
     if(n==null || isNaN(n)) return '0';
     return Math.trunc(Number(n)).toLocaleString();
   }
+  function fmtUsdt(n){
+    if(n==null || isNaN(n)) return '0';
+    return Number(n).toLocaleString(undefined,{minimumFractionDigits:0, maximumFractionDigits:2});
+  }
   function fmtPrice(n){
     if(n==null || isNaN(n)) return '0';
     return Math.trunc(n).toLocaleString();
@@ -893,7 +897,7 @@
           <span class="trade-name">${esc(t.ticker)}<span class="dir-badge ${t.dir}">${t.dir==='long'?'롱':'숏'}</span><a href="${tvUrl(t.ticker)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="text-decoration:none;font-size:12px;opacity:.85;" title="TradingView에서 보기">📈</a></span>
           ${headerRight}
         </div>
-        <div class="trade-date">${t.date} · 진입 ${esc(t.entry)}${t.amount?` · 투자금액 ${fmtNum(toNum(t.amount))}원${t.amountUsdt?` (${fmtNum(t.amountUsdt)} USDT)`:''}`:''}</div>
+        <div class="trade-date">${t.date} · 진입 ${esc(t.entry)}${t.amount?` · 투자금액 ${fmtNum(toNum(t.amount))}원${t.amountUsdt?` (${fmtUsdt(t.amountUsdt)} USDT)`:''}`:''}</div>
         ${open ? `
         <div class="trade-detail" data-stop-propagation="1">
           ${CATS.filter(c=> t.checklistNotes && t.checklistNotes[c.key]).map(c=>`<div class="q">${c.label}</div><div class="a">${esc(t.checklistNotes[c.key])}</div>`).join('')}
@@ -1323,9 +1327,9 @@
       const originalText = fetchRateBtn.textContent;
       fetchRateBtn.textContent = '조회중...';
       try{
-        const res = await fetch('https://api.upbit.com/v1/ticker?markets=KRW-USDT');
+        const res = await fetch('https://api.frankfurter.dev/v1/latest?from=USD&to=KRW');
         const data = await res.json();
-        const price = data && data[0] && data[0].trade_price;
+        const price = data && data.rates && data.rates.KRW;
         if(price){
           state.usdtRate = price;
           await storageSet('usdtRate', price);
@@ -1334,6 +1338,7 @@
           alert('환율을 가져오지 못했어요. 직접 입력해주세요.');
         }
       }catch(e){
+        console.error(e);
         alert('실시간 환율 조회에 실패했어요 (네트워크 문제일 수 있어요). 직접 입력해주세요.');
       } finally {
         if(fetchRateBtn) fetchRateBtn.textContent = originalText;
