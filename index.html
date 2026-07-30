@@ -233,13 +233,30 @@
     '삼성전자': 'KRX:005930',
     '하이닉스': 'KRX:000660',
   };
+  const TICKER_MARKET_MAP = {
+    '삼성전자': 'domestic',
+    '하이닉스': 'domestic',
+    'KOSPI': 'domestic',
+    '비트코인': 'overseas',
+    '이더리움': 'overseas',
+    'SOXL': 'overseas',
+    'NAS100': 'overseas',
+  };
+  function guessMarket(ticker){
+    if(TICKER_MARKET_MAP[ticker]) return TICKER_MARKET_MAP[ticker];
+    // 모르는(직접 추가한) 종목은 한글 포함 여부로 대략 추정 (한글 종목명 → 국내로 간주)
+    return /[가-힣]/.test(ticker) ? 'domestic' : 'overseas';
+  }
   function tvUrl(ticker){
     const symbol = TICKER_TV_MAP[ticker];
     if(symbol) return `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(symbol)}`;
     return `https://www.tradingview.com/symbols/${encodeURIComponent(ticker)}/`;
   }
   const BROKER_LIST = ['OKX', '나무증권', '키움증권'];
-  const DEFAULT_FEE_RATES = { 'OKX': 0.08, '나무증권': 0.015, '키움증권': 0.015 };
+  const DEFAULT_FEE_RATES = { 'OKX': 0.08, '나무증권': 0.015, '키움증권': 0.015, '토스증권_국내': 0.015, '토스증권_해외': 0.1 };
+  function getBrokerList(){
+    return state.currentPerson==='jinwoo' ? ['토스증권'] : BROKER_LIST;
+  }
   const CATS = [
     {key:'기본환경', label:'기본 환경', sub:'주력 종목 / 시간축 / 매매 가능 시간 / 주력 방향', color:'var(--text)'},
     {key:'진입조건', label:'진입 조건', sub:'시장 상태 / 주요 자리 / 지표 / 캔들·거래량 반응', color:'var(--accent)'},
@@ -258,9 +275,18 @@
     {id:'main', name:'1억 챌린지'},
     {id:'journal2', name:'투자 기록'},
   ];
+  const DEFAULT_JOURNALS_JINWOO = [
+    {id:'main', name:'1억 챌린지'},
+  ];
+  const PEOPLE = [
+    {id:'jinwoo', name:'진우'},
+    {id:'aeju', name:'애주'},
+  ];
 
   let state = {
     tab: 'log',
+    currentPerson: null,
+    personLoading: false,
     currentJournal: 'main',
     journals: DEFAULT_JOURNALS,
     journalDropdownOpen: false,
@@ -280,6 +306,7 @@
     amountInputMode: 'krw',
     editingUsdtRate: false,
     broker: '',
+    market: 'domestic',
     feeRates: {...DEFAULT_FEE_RATES},
     editingFeeRate: false,
     dir: 'long',
@@ -464,9 +491,15 @@
 
   const LS_PREFIX = 'trading-journal:';
   function nsKey(key){
-    if(key==='journals') return key; // 저널 목록 자체는 공유(전역) 키
-    if(!state.currentJournal || state.currentJournal==='main') return key; // 기존 데이터와 호환
-    return `${key}:${state.currentJournal}`;
+    let k = key;
+    if(k!=='journals' && state.currentJournal && state.currentJournal!=='main'){
+      k = `${k}:${state.currentJournal}`;
+    }
+    if(state.currentPerson === 'jinwoo'){
+      k = `jinwoo:${k}`;
+    }
+    // 애주(기본)는 기존에 쓰던 키 그대로 사용 (하위 호환)
+    return k;
   }
   async function storageGet(key, fallback){
     const k = nsKey(key);
@@ -508,13 +541,43 @@
   }
 
   async function loadAll(){
-    state.journals = await storageGet('journals', DEFAULT_JOURNALS);
+    render();
+  }
+
+  async function loadPersonData(){
+    const defaultJournals = state.currentPerson==='jinwoo' ? DEFAULT_JOURNALS_JINWOO : DEFAULT_JOURNALS;
+    state.journals = await storageGet('journals', defaultJournals);
+    state.currentJournal = 'main';
     await loadJournalData();
+  }
+
+  async function choosePerson(personId){
+    state.currentPerson = personId;
+    state.personLoading = true;
+    render();
+    await loadPersonData();
+    state.personLoading = false;
+    render();
+  }
+
+  function switchPerson(){
+    state.currentPerson = null;
     render();
   }
 
   async function loadJournalData(){
-    state.settings = await storageGet('settings', {});
+    const defaultCapital = state.currentJournal==='journal2' ? 10000000 : 1000000;
+    const [settings, trades, customTickers, capital, withdrawals, pctSettings, usdtRate, feeRates] = await Promise.all([
+      storageGet('settings', {}),
+      storageGet('trades', []),
+      storageGet('customTickers', []),
+      storageGet('capital', defaultCapital),
+      storageGet('withdrawals', []),
+      storageGet('pctSettings', {target:6, stop:2}),
+      storageGet('usdtRate', 1380),
+      storageGet('feeRates', {...DEFAULT_FEE_RATES}),
+    ]);
+    state.settings = settings;
     let settingsChanged = false;
     CATS.forEach(c=>{
       if(!state.settings[c.key] && DEFAULT_SETTINGS[c.key]){
@@ -522,17 +585,15 @@
         settingsChanged = true;
       }
     });
-    if(settingsChanged) await storageSet('settings', state.settings);
-    state.trades = await storageGet('trades', []);
-    state.customTickers = await storageGet('customTickers', []);
-    const defaultCapital = state.currentJournal==='journal2' ? 10000000 : 1000000;
-    state.capital = await storageGet('capital', defaultCapital);
-    state.withdrawals = await storageGet('withdrawals', []);
-    const pctSettings = await storageGet('pctSettings', {target:6, stop:2});
+    if(settingsChanged) storageSet('settings', state.settings); // 백그라운드로 저장, 화면 표시는 기다리지 않음
+    state.trades = trades;
+    state.customTickers = customTickers;
+    state.capital = capital;
+    state.withdrawals = withdrawals;
     state.targetPct = pctSettings.target ?? 6;
     state.stopPct = pctSettings.stop ?? 2;
-    state.usdtRate = await storageGet('usdtRate', 1380);
-    state.feeRates = await storageGet('feeRates', {...DEFAULT_FEE_RATES});
+    state.usdtRate = usdtRate;
+    state.feeRates = feeRates;
   }
 
   async function switchJournal(id){
@@ -594,17 +655,44 @@
     return state.trades.find(t=>t.id===state.editingId) || null;
   }
 
+  function renderPersonSelect(){
+    return `
+      <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:40px;padding:24px;">
+        <div style="text-align:center;">
+          <div style="font-size:34px;font-weight:800;color:var(--page-text);letter-spacing:-0.5px;">💰 1억 챌린지</div>
+        </div>
+        <div style="display:flex;gap:24px;flex-wrap:wrap;justify-content:center;">
+          ${PEOPLE.map(p=>`
+            <button data-action="choose-person" data-id="${p.id}"
+              style="width:120px;height:120px;border-radius:12px;font-size:19px;font-weight:700;border:1px solid var(--border-onbg);
+              background:var(--panel);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;">${esc(p.name)}</button>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
   function render(){
     const app = document.getElementById('app');
+    if(!state.currentPerson){
+      app.innerHTML = renderPersonSelect();
+      bindEvents();
+      return;
+    }
+    if(state.personLoading){
+      app.innerHTML = `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;color:var(--page-text);opacity:.6;font-size:14px;">불러오는 중...</div>`;
+      return;
+    }
     app.innerHTML = `
       <div class="shell">
         <div class="topbar">
           <div class="brand">
             <span class="tick">💰</span>
             <h1 style="cursor:pointer;user-select:none;" data-action="toggle-journal-dropdown">${esc((state.journals.find(j=>j.id===state.currentJournal)||{}).name || '1억 챌린지')}</h1>
+            ${state.journals.length>1 ? `
             <button data-action="toggle-journal-dropdown" style="background:none;border:none;cursor:pointer;padding:0;margin:0 0 0 2px;opacity:.75;display:inline-flex;align-items:center;position:relative;top:-2px;">
               <span style="display:inline-block;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;${state.journalDropdownOpen?`border-bottom:6px solid var(--page-text);`:`border-top:6px solid var(--page-text);`}"></span>
-            </button>
+            </button>` : ''}
             ${state.journalDropdownOpen ? `
             <div style="position:absolute;top:100%;left:0;margin-top:8px;z-index:30;min-width:180px;background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 10px 28px rgba(0,0,0,0.35);">
               ${state.journals.map(j=>`
@@ -612,9 +700,12 @@
               `).join('')}
             </div>` : ''}
           </div>
-          <div class="tabs">
-            <div class="tab ${state.tab==='log'?'active':''}" data-action="tab" data-tab="log">매매 기록</div>
-            <div class="tab ${state.tab==='settings'?'active':''}" data-action="tab" data-tab="settings">시스템 설정</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <button data-action="switch-person" style="background:none;border:none;color:var(--page-text);opacity:.6;font-size:11px;cursor:pointer;text-decoration:underline;">${esc((PEOPLE.find(p=>p.id===state.currentPerson)||{}).name||'')} · 전환</button>
+            <div class="tabs">
+              <div class="tab ${state.tab==='log'?'active':''}" data-action="tab" data-tab="log">매매 기록</div>
+              <div class="tab ${state.tab==='settings'?'active':''}" data-action="tab" data-tab="settings">시스템 설정</div>
+            </div>
           </div>
         </div>
         ${state.tab==='settings' ? renderSettingsTab() : renderLogTab()}
@@ -710,7 +801,7 @@
     const fieldVal = (id, fallback) => sessionChanged ? (fallback ?? '') : liveOr(id, fallback);
     const currentTicker = state.ticker || (editing ? editing.ticker : '');
     const allTickers = [...TICKER_PRESETS, ...state.customTickers];
-    const dir = editing ? editing.dir : state.dir;
+    const dir = state.currentPerson==='jinwoo' ? 'long' : (editing ? editing.dir : state.dir);
     const entryVal = fieldVal('f-entry', editing ? editing.entry : '');
     const hasSettings = state.settings.진입조건 || state.settings.리스크;
 
@@ -751,12 +842,14 @@
           </label>${tickerField}
         </div>
 
+        ${state.currentPerson==='jinwoo' ? '' : `
         <div class="field"><label>방향</label>
           <div class="dir-toggle">
             <div class="dir-btn ${dir==='long'?'long-active':''}" data-action="set-dir" data-dir="long">롱 (매수)</div>
             <div class="dir-btn ${dir==='short'?'short-active':''}" data-action="set-dir" data-dir="short">숏 (매도)</div>
           </div>
         </div>
+        `}
 
         <div class="field"><label>진입가</label><input id="f-entry" data-action="entry-input" inputmode="decimal" value="${esc(formatPlain(entryVal))}" placeholder="0"/></div>
 
@@ -791,23 +884,33 @@
 
         <div class="field">
           <label style="display:flex;justify-content:space-between;align-items:center;">
-            <span>거래처 (매매 수수료 반영, 선택)</span>
-            ${(state.broker || (editing && editing.broker)) ? `<button class="ghost" type="button" style="padding:1px 7px;font-size:9.5px;" data-action="toggle-fee-edit">수수료율 수정</button>` : ''}
+            <span>거래처 ${state.currentPerson==='jinwoo' ? '' : '(매매 수수료 반영, 선택)'}</span>
+            ${(state.broker || (editing && editing.broker) || state.currentPerson==='jinwoo') ? `<button class="ghost" type="button" style="padding:1px 7px;font-size:9.5px;" data-action="toggle-fee-edit">수수료율 수정</button>` : ''}
           </label>
           <div class="dir-toggle" style="flex-wrap:wrap;">
-            <div class="dir-btn ${(!state.broker && !(editing&&editing.broker))?'long-active':''}" data-action="set-broker" data-broker="">없음</div>
-            ${BROKER_LIST.map(b=>`<div class="dir-btn ${((state.broker||(editing&&editing.broker))===b)?'long-active':''}" data-action="set-broker" data-broker="${esc(b)}">${esc(b)}</div>`).join('')}
+            ${state.currentPerson==='jinwoo' ? '' : `<div class="dir-btn ${(!state.broker && !(editing&&editing.broker))?'long-active':''}" data-action="set-broker" data-broker="">없음</div>`}
+            ${getBrokerList().map(b=>`<div class="dir-btn ${((state.broker||(editing&&editing.broker)||(state.currentPerson==='jinwoo'?'토스증권':''))===b)?'long-active':''}" data-action="set-broker" data-broker="${esc(b)}">${esc(b)}</div>`).join('')}
           </div>
           ${(()=>{
-            const curBroker = state.broker || (editing ? editing.broker : '') || '';
+            const curBroker = state.broker || (editing ? editing.broker : '') || (state.currentPerson==='jinwoo' ? '토스증권' : '') || '';
             if(!curBroker) return '';
-            const curRate = state.feeRates[curBroker] ?? DEFAULT_FEE_RATES[curBroker] ?? 0;
-            return state.editingFeeRate ? `
+            const isToss = curBroker === '토스증권';
+            const market = state.market || (editing ? editing.market : '') || 'domestic';
+            const feeKey = isToss ? `토스증권_${market==='overseas'?'해외':'국내'}` : curBroker;
+            const curRate = state.feeRates[feeKey] ?? DEFAULT_FEE_RATES[feeKey] ?? 0;
+            const marketToggle = isToss ? `
+              <div class="dir-toggle" style="margin-top:8px;">
+                <div class="dir-btn ${market!=='overseas'?'long-active':''}" data-action="set-market" data-market="domestic">국내주식</div>
+                <div class="dir-btn ${market==='overseas'?'short-active':''}" data-action="set-market" data-market="overseas">해외주식</div>
+              </div>
+            ` : '';
+            const rateBox = state.editingFeeRate ? `
               <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
                 <input id="edit-fee-rate" inputmode="decimal" value="${esc(formatPlain(liveOr('edit-fee-rate', curRate)))}" placeholder="수수료율(%)" style="flex:1;"/>
-                <button class="primary" type="button" data-action="save-fee-rate" data-broker="${esc(curBroker)}">저장</button>
+                <button class="primary" type="button" data-action="save-fee-rate" data-broker="${esc(feeKey)}">저장</button>
               </div>
-            ` : `<div class="ref-hint" style="margin-top:8px;">${esc(curBroker)} 수수료율: ${curRate}% (매수+매도 왕복 반영)</div>`;
+            ` : `<div class="ref-hint" style="margin-top:8px;">${esc(curBroker)}${isToss?` (${market==='overseas'?'해외':'국내'}주식)`:''} 수수료율: ${curRate}% (매수+매도 왕복 반영)</div>`;
+            return marketToggle + rateBox;
           })()}
         </div>
 
@@ -1057,6 +1160,14 @@
   }
 
   function bindEvents(){
+    document.querySelectorAll('[data-action="choose-person"]').forEach(el=>{
+      el.addEventListener('click', ()=>{ choosePerson(el.dataset.id); });
+    });
+    document.querySelectorAll('[data-action="switch-person"]').forEach(el=>{
+      el.addEventListener('click', ()=>{ switchPerson(); });
+    });
+    if(!state.currentPerson) return;
+
     document.querySelectorAll('[data-action="tab"]').forEach(el=>{
       el.addEventListener('click', ()=>{ state.tab = el.dataset.tab; render(); });
     });
@@ -1217,6 +1328,7 @@
       el.addEventListener('click', (e)=>{
         e.stopPropagation();
         state.ticker = el.dataset.ticker;
+        state.market = guessMarket(el.dataset.ticker);
         state.tickerDropdownOpen = false;
         render();
       });
@@ -1246,6 +1358,7 @@
         await storageSet('customTickers', state.customTickers);
       }
       state.ticker = v;
+      state.market = guessMarket(v);
       state.addingTicker = false;
       render();
     });
@@ -1279,6 +1392,15 @@
         const editing = getEditingTrade();
         if(editing){ editing.broker = el.dataset.broker; }
         else { state.broker = el.dataset.broker; }
+        state.editingFeeRate = false;
+        render();
+      });
+    });
+    document.querySelectorAll('[data-action="set-market"]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const editing = getEditingTrade();
+        if(editing){ editing.market = el.dataset.market; }
+        else { state.market = el.dataset.market; }
         state.editingFeeRate = false;
         render();
       });
@@ -1469,6 +1591,7 @@
       state.formPhotos = [];
       state.amountInputMode = 'krw';
       state.broker = '';
+      state.market = 'domestic';
       state.editingFeeRate = false;
       formChecklist = {}; formChecklistNotes = {};
       render();
@@ -1505,20 +1628,22 @@
       const why = document.getElementById('f-why').value;
       const ruleKept = document.getElementById('f-rulekept').value;
       const mistake = document.getElementById('f-mistake').value;
-      const dir = editing ? editing.dir : state.dir;
+      const dir = state.currentPerson==='jinwoo' ? 'long' : (editing ? editing.dir : state.dir);
       const photos = state.formPhotos.slice();
-      const broker = state.broker || (editing ? editing.broker : '') || '';
-      const feeRatePct = broker ? (state.feeRates[broker] ?? DEFAULT_FEE_RATES[broker] ?? 0) : 0;
+      const broker = state.broker || (editing ? editing.broker : '') || (state.currentPerson==='jinwoo' ? '토스증권' : '') || '';
+      const market = broker==='토스증권' ? (state.market || (editing ? editing.market : '') || 'domestic') : null;
+      const feeKey = broker==='토스증권' ? `토스증권_${market==='overseas'?'해외':'국내'}` : broker;
+      const feeRatePct = broker ? (state.feeRates[feeKey] ?? DEFAULT_FEE_RATES[feeKey] ?? 0) : 0;
 
       if(editing){
-        Object.assign(editing, {ticker, dir, entry, amount, amountUsdt, usdtRateUsed, why, ruleKept, mistake, checklist, checklistNotes, photos, broker, feeRatePct});
+        Object.assign(editing, {ticker, dir, entry, amount, amountUsdt, usdtRateUsed, why, ruleKept, mistake, checklist, checklistNotes, photos, broker, market, feeRatePct});
         await storageSet('trades', state.trades.map(({_open,_closing,_sellFormOpen,_editingSellId, ...rest})=>rest));
         state.editingId = null;
       } else {
         const newTrade = {
           id: Date.now(),
           date: new Date().toISOString().slice(0,10),
-          ticker, dir, entry, amount, amountUsdt, usdtRateUsed, why, ruleKept, mistake, checklist, checklistNotes, photos, broker, feeRatePct,
+          ticker, dir, entry, amount, amountUsdt, usdtRateUsed, why, ruleKept, mistake, checklist, checklistNotes, photos, broker, market, feeRatePct,
           sells: [],
         };
         state.trades = [newTrade, ...state.trades];
@@ -1530,6 +1655,7 @@
       state.formPhotos = [];
       state.amountInputMode = 'krw';
       state.broker = '';
+      state.market = 'domestic';
       state.editingFeeRate = false;
       formChecklist = {}; formChecklistNotes = {};
       render();
@@ -1637,6 +1763,7 @@
         state.formPhotos = (t && t.photos) ? t.photos.slice() : [];
         state.amountInputMode = (t && t.amountUsdt) ? 'usdt' : 'krw';
         state.broker = '';
+        state.market = 'domestic';
         state.editingFeeRate = false;
         formChecklist = {}; formChecklistNotes = {};
         render();
