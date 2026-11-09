@@ -279,7 +279,6 @@
     {id:'main', name:'1억 챌린지'},
   ];
   const PEOPLE = [
-    {id:'jinwoo', name:'진우'},
     {id:'aeju', name:'애주'},
   ];
 
@@ -675,8 +674,8 @@
   function render(){
     const app = document.getElementById('app');
     if(!state.currentPerson){
-      app.innerHTML = renderPersonSelect();
-      bindEvents();
+      // 사람 고르기 화면 없이 바로 애주 일지로
+      choosePerson('aeju');
       return;
     }
     if(state.personLoading){
@@ -701,7 +700,6 @@
             </div>` : ''}
           </div>
           <div style="display:flex;align-items:center;gap:10px;">
-            <button data-action="switch-person" style="background:none;border:none;color:var(--page-text);opacity:.6;font-size:11px;cursor:pointer;text-decoration:underline;">${esc((PEOPLE.find(p=>p.id===state.currentPerson)||{}).name||'')} · 전환</button>
             <div class="tabs">
               <div class="tab ${state.tab==='log'?'active':''}" data-action="tab" data-tab="log">매매 기록</div>
               <div class="tab ${state.tab==='settings'?'active':''}" data-action="tab" data-tab="settings">시스템 설정</div>
