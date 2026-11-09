@@ -635,6 +635,19 @@
     });
     if(settingsChanged) storageSet('settings', state.settings); // 백그라운드로 저장, 화면 표시는 기다리지 않음
     state.trades = trades;
+    // 서버가 멈춰 있던 동안 이 기기에만 저장된 기록이 있으면 서버에 합칠지 묻기
+    try{
+      if(supabaseClient && !SYNC_FAIL){
+        const lk = LS_PREFIX + nsKey('trades');
+        const local = JSON.parse(localStorage.getItem(lk) || '[]');
+        const have = new Set((trades||[]).map(t=>String(t.id)));
+        const extras = Array.isArray(local) ? local.filter(t=>t && t.id!=null && !have.has(String(t.id))) : [];
+        if(extras.length && confirm(`이 기기에만 남아 있는 매매 기록 ${extras.length}건이 있어요 (서버가 멈춰 있던 동안 저장된 것). 서버에 합칠까요?\n(취소하면 다음에 다시 물어봐요)`)){
+          state.trades = (trades||[]).concat(extras);
+          await storageSet('trades', state.trades.map(({_open,_closing,_sellFormOpen,_editingSellId, ...rest})=>rest));
+        }
+      }
+    }catch(e){ console.error('local merge check failed', e); }
     state.customTickers = customTickers;
     state.capital = capital;
     state.withdrawals = withdrawals;
