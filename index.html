@@ -425,6 +425,8 @@
     return sellPnlPct(t, toNum(sell.price)) * sellLeverage(sell);
   }
   function sellRealizedAmount(t, sell){
+    // OKX 자동 기록: 거래소가 준 실제 실현손익(수수료·펀딩 포함)을 그대로 씀
+    if(t.realizedKrw!==undefined && t.realizedKrw!==null && !isNaN(toNum(t.realizedKrw))) return toNum(t.realizedKrw) * (toNum(sell.pct)||0) / 100;
     const portion = (toNum(t.amount)||0) * (toNum(sell.pct)||0) / 100;
     const rawPnl = portion * sellLeveragedPct(t, sell);
     const feeRatePct = toNum(t.feeRatePct) || 0;
