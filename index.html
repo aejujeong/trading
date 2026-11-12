@@ -409,8 +409,61 @@
   function tradeRemainingPct(t){
     return Math.max(0, 100 - sellsSoldPct(t));
   }
+  // ---- USDT 기록은 현재 환율로 다시 환산 ----
+  // 기록 당시 환율로 원화가 박혀 있어서, 환율이 바뀌면 원화 잔액이 실제(OKX)와 어긋남.
+  // USDT로 기록된 매매는 기록 당시 환율로 USDT로 되돌린 뒤 현재 환율을 곱해서 보여준다.
+  function tradeUsdtRate(t){
+    const used = toNum(t.usdtRateUsed);
+    if(!isNaN(used) && used>0) return used;
+    const usdt = toNum(t.amountUsdt), krw = toNum(t.amount);
+    if(!isNaN(usdt) && usdt>0 && !isNaN(krw) && krw>0) return krw/usdt;
+    return null;
+  }
+  function toNowKrw(t, krw){
+    const r = tradeUsdtRate(t);
+    const now = toNum(state.usdtRate);
+    if(!r || isNaN(now) || now<=0) return krw;
+    return krw / r * now;
+  }
+  function recomputeCapital(){
+    const now = toNum(state.usdtRate);
+    let usdt = toNum(state.capitalUsdt);
+    let derived = false;
+    if(isNaN(usdt) || usdt<=0){
+      // 시작 자본금 USDT 값이 따로 없으면: OKX(USDT) 매매만 있는 일지일 때 첫 매매 당시 환율로 역산
+      const withAmt = state.trades.filter(t=> toNum(t.amount)>0);
+      const allUsdt = withAmt.length>0 && withAmt.every(t=> tradeUsdtRate(t));
+      if(allUsdt){
+        const first = withAmt.slice().sort((a,b)=> a.id-b.id)[0];
+        usdt = (toNum(state.capitalRaw)||0) / tradeUsdtRate(first);
+        derived = true;
+      } else usdt = NaN;
+    }
+    if(!isNaN(usdt) && usdt>0 && !isNaN(now) && now>0){
+      state.capital = usdt * now;
+      state.capitalUsdtShown = usdt;
+      state.capitalUsdtDerived = derived;
+    } else {
+      state.capital = toNum(state.capitalRaw)||0;
+      state.capitalUsdtShown = null;
+    }
+  }
+  async function refreshUsdtRate(){
+    try{
+      const res = await fetch('https://api.frankfurter.dev/v1/latest?from=USD&to=KRW');
+      const data = await res.json();
+      const price = data && data.rates && data.rates.KRW;
+      if(price && price>0){
+        state.usdtRate = price; recomputeCapital();
+        storageSet('usdtRate', price);
+        recomputeCapital();
+        render();
+      }
+    }catch(e){ console.error('환율 자동 조회 실패', e); }
+  }
+
   function tradeRemainingAmount(t){
-    return (toNum(t.amount)||0) * tradeRemainingPct(t) / 100;
+    return toNowKrw(t, (toNum(t.amount)||0) * tradeRemainingPct(t) / 100);
   }
   function sellPnlPct(t, price){
     const entry = toNum(t.entry);
@@ -425,6 +478,9 @@
     return sellPnlPct(t, toNum(sell.price)) * sellLeverage(sell);
   }
   function sellRealizedAmount(t, sell){
+    return toNowKrw(t, sellRealizedAmountAtEntry(t, sell));
+  }
+  function sellRealizedAmountAtEntry(t, sell){
     // OKX 자동 기록: 거래소가 준 실제 실현손익(수수료·펀딩 포함)을 그대로 씀
     if(t.realizedKrw!==undefined && t.realizedKrw!==null && !isNaN(toNum(t.realizedKrw))) return toNum(t.realizedKrw) * (toNum(sell.pct)||0) / 100;
     const portion = (toNum(t.amount)||0) * (toNum(sell.pct)||0) / 100;
@@ -442,7 +498,7 @@
     return sellsSoldPct(t) >= 99.999;
   }
   function tradeFinalReturnPct(t){
-    const amt = toNum(t.amount)||0;
+    const amt = toNowKrw(t, toNum(t.amount)||0);
     return amt ? (tradeRealizedPnl(t)/amt*100) : null;
   }
 
@@ -633,7 +689,8 @@
       storageGet('pctSettings', {target:6, stop:2}),
       storageGet('usdtRate', 1380),
       storageGet('feeRates', {...DEFAULT_FEE_RATES}),
-    ]);
+      storageGet('capitalUsdt', null),
+    ]).then(r=>{ state.capitalUsdt = r[8]; return r; });
     state.settings = settings;
     let settingsChanged = false;
     CATS.forEach(c=>{
@@ -651,6 +708,9 @@
     state.stopPct = pctSettings.stop ?? 2;
     state.usdtRate = usdtRate;
     state.feeRates = feeRates;
+    state.capitalRaw = capital;
+    recomputeCapital();
+    refreshUsdtRate(); // 열 때마다 현재 환율 자동 반영 (기다리지 않음)
   }
 
   async function switchJournal(id){
@@ -1116,6 +1176,37 @@
     `;
   }
 
+  // ---- 히스토리 날짜별 묶음: 그날 손익 합계 + 그날 시작 잔고 대비 수익률 ----
+  function itemDate(item){ return String((item.data && item.data.date) || '').slice(0,10) || '날짜 없음'; }
+  function renderHistoryByDate(items){
+    const groups = [];
+    const byDate = {};
+    items.forEach(item=>{
+      const d = itemDate(item);
+      if(!byDate[d]){ byDate[d] = {date:d, items:[]}; groups.push(byDate[d]); }
+      byDate[d].items.push(item);
+    });
+    const dayPnl = g => g.items.reduce((s,it)=> s + (it.type==='trade' ? tradeRealizedPnl(it.data) : 0), 0);
+    const dayOut = g => g.items.reduce((s,it)=> s + (it.type==='withdrawal' ? (toNum(it.data.amount)||0) : 0), 0);
+    // 그날 시작 잔고 = 자본금 + 그 이전 날들 손익 − 그 이전 출금
+    const asc = groups.slice().sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:0);
+    let running = toNum(state.capital)||0;
+    asc.forEach(g=>{ g.startEquity = running; g.pnl = dayPnl(g); running += g.pnl - dayOut(g); });
+    groups.sort((a,b)=> a.date<b.date?1:a.date>b.date?-1:0);
+    return groups.map(g=>{
+      const pct = g.startEquity ? g.pnl/g.startEquity*100 : 0;
+      const tradeCnt = g.items.filter(it=>it.type==='trade').length;
+      const cls = g.pnl>0?'pos':g.pnl<0?'neg':'neu';
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin:18px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--hborder);">
+          <span style="font-weight:700;color:var(--htext);font-size:13px;">${esc(g.date)} <span style="font-size:11px;color:var(--hdim);font-weight:600;margin-left:4px;">${tradeCnt}건</span></span>
+          <span class="${cls}" style="font-family:var(--mono);font-weight:700;font-size:13px;">${g.pnl>0?'+':''}${fmtNum(g.pnl)}원 <span style="font-size:11px;opacity:.85;">(${pct>0?'+':''}${pct.toFixed(2)}%)</span></span>
+        </div>
+        ${g.items.map(item=> item.type==='trade' ? renderTradeRow(item.data) : renderWithdrawalRow(item.data)).join('')}
+      `;
+    }).join('');
+  }
+
   function renderWithdrawalRow(w){
     const open = w._open;
     return `
@@ -1153,7 +1244,7 @@
         <div class="log-col-right ${state.mobileView==='history'?'mobile-active':''}">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding:10px 14px;background:var(--hbg);border:1px solid var(--hborder);border-radius:8px;">
             <span style="font-size:12px;color:var(--hdim);">시작 자본금</span>
-            <span style="font-weight:700;color:var(--htext);">${fmtNum(state.capital)}원</span>
+            <span style="font-weight:700;color:var(--htext);">${fmtNum(state.capital)}원${state.capitalUsdtShown?` <span style="font-size:11px;color:var(--hdim);font-weight:600;">(${fmtUsdt(state.capitalUsdtShown)} USDT · 1 USDT = ${fmtNum(state.usdtRate)}원)</span>`:''}</span>
           </div>
 
           <div class="stats-row">
@@ -1208,7 +1299,7 @@
             <div class="section-title">기록 히스토리 (총 ${total}건 · 출금 ${state.withdrawals.length}건)</div>
             ${historyItems.length===0
               ? `<div class="empty">아직 기록이 없어요. 왼쪽에서 첫 매매를 기록해보세요.</div>`
-              : historyItems.map(item=> item.type==='trade' ? renderTradeRow(item.data) : renderWithdrawalRow(item.data)).join('')}
+              : renderHistoryByDate(historyItems)}
           </div>
         </div>
       </div>
@@ -1560,7 +1651,7 @@
     if(saveUsdtRateBtn) saveUsdtRateBtn.addEventListener('click', async ()=>{
       const val = toNum(document.getElementById('edit-usdt-rate').value);
       if(isNaN(val) || val<=0){ alert('환율을 정확히 입력해주세요.'); return; }
-      state.usdtRate = val;
+      state.usdtRate = val; recomputeCapital();
       await storageSet('usdtRate', val);
       state.editingUsdtRate = false;
       render();
@@ -1574,7 +1665,7 @@
         const data = await res.json();
         const price = data && data.rates && data.rates.KRW;
         if(price){
-          state.usdtRate = price;
+          state.usdtRate = price; recomputeCapital();
           await storageSet('usdtRate', price);
           render();
         } else {
